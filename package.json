@@ -1,0 +1,26 @@
+{
+  "name": "split-pay",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,magenta \"pnpm --filter @split-pay/server dev\" \"pnpm --filter @split-pay/web dev\"",
+    "build": "pnpm --filter @split-pay/shared build && pnpm --filter @split-pay/web build && pnpm --filter @split-pay/server build",
+    "start": "pnpm --filter @split-pay/server start",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter @split-pay/server db:migrate",
+    "db:seed": "pnpm --filter @split-pay/server db:seed",
+    "db:studio": "pnpm --filter @split-pay/server db:studio",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  }
+}

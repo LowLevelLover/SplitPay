@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp",
+        "--path",
+        "/home/farzin/workspace/hackathon/split-pay"
+      ]
+    }
+  }
+}
