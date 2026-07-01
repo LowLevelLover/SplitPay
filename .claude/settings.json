@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "mcp__codegraph__*"
+      "mcp__codegraph__*",
+      "Bash(rtk grep *)",
+      "Bash(rtk git grep *)"
     ]
   },
   "hooks": {

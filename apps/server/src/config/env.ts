@@ -11,6 +11,10 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   BOT_TOKEN: z.string().min(1, "BOT_TOKEN is required (get one from @BotFather)"),
   PUBLIC_URL: z.string().url(),
+  // TON escrow. Without TON_MNEMONIC the app uses the off-chain simulation.
+  TON_NETWORK: z.enum(["testnet", "mainnet"]).default("testnet"),
+  TON_MNEMONIC: z.string().optional(), // 24 space-separated words (service wallet)
+  TON_API_KEY: z.string().optional(), // toncenter API key (optional, higher rate limit)
 });
 
 const parsed = envSchema.safeParse(process.env);

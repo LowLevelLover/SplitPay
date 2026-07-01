@@ -1,60 +1,61 @@
 import { InlineKeyboard } from "grammy";
-import { eq } from "drizzle-orm";
 import type { SplitPayContext } from "../context.js";
 import { env } from "../../config/env.js";
-import { db, schema } from "../../db/client.js";
 import { formatCents } from "../../lib/money.js";
-import { createExpense } from "../../services/expenses.js";
-import { parseExpense } from "../parser/expense.js";
+import { applyParsedOps } from "../../services/expenses.js";
+import { getGroupSummary } from "../../services/balances.js";
+import { parseMessage } from "../parser/expense.js";
 
-// On bot mention: parse the message into an expense, split evenly among the
-// mentioned members (or the whole group if none are mentioned).
+const name = (u: { username: string | null; firstName: string }) =>
+  u.username ? `@${u.username}` : u.firstName;
+
+// On bot mention: parse the message into expense/debt/ledger operations, record
+// them, then reply with the updated "who pays whom" summary.
 export async function handleExpenseMention(ctx: SplitPayContext): Promise<void> {
   const text = ctx.message?.text;
-  if (!text || !ctx.dbGroupId || !ctx.dbUserId) return;
+  if (!text || !ctx.dbGroupId) return;
 
-  const draft = parseExpense(text);
-  if (!draft) {
-    await ctx.reply("I couldn't find an amount. Try: `@" + ctx.me.username + " paid 40 dinner @ana @bob`", {
-      parse_mode: "Markdown",
-    });
+  // Strip the bot's own @mention so it isn't parsed as a participant.
+  const cleaned = text.replace(new RegExp(`@${ctx.me.username}\\b`, "gi"), " ");
+  const ops = parseMessage(cleaned);
+  if (ops.length === 0) {
+    await ctx.reply(
+      "I couldn't read that. Try one of:\n" +
+        `• \`@${ctx.me.username} @ali paid 60000 dinner\`\n` +
+        `• \`@${ctx.me.username} @ali should pay @bob 50000\`\n` +
+        "• a ledger:\n`@ali -50000 kabab, +150000 paid`\n`@bob -100000 pizza`",
+      { parse_mode: "Markdown" },
+    );
     return;
   }
 
-  // Resolve mentioned @usernames to group members; default to everyone.
-  const members = await db.query.groupMembers.findMany({
-    where: eq(schema.groupMembers.groupId, ctx.dbGroupId),
-    with: { user: true },
-  });
+  const created = await applyParsedOps(ctx.dbGroupId, ops);
+  const summary = await getGroupSummary(ctx.dbGroupId);
 
-  const mentioned = draft.participantUsernames.map((u) => u.toLowerCase());
-  const participants =
-    mentioned.length > 0
-      ? members.filter((m) => m.user.username && mentioned.includes(m.user.username.toLowerCase()))
-      : members;
+  const recorded = created
+    .map((e) => {
+      const what = e.description ? ` (${e.description})` : "";
+      return `• ${name(e.payer)} paid *${formatCents(e.amountCents, e.currency)} ${e.currency}*${what}`;
+    })
+    .join("\n");
 
-  // Ensure the payer is part of the split.
-  const participantIds = new Set(participants.map((m) => m.userId));
-  participantIds.add(ctx.dbUserId);
-
-  const expense = await createExpense({
-    groupId: ctx.dbGroupId,
-    payerId: ctx.dbUserId,
-    amountCents: draft.amountCents,
-    currency: draft.currency,
-    description: draft.description,
-    participantIds: [...participantIds],
-  });
+  const owed =
+    summary.suggestions.length === 0
+      ? "🎉 All settled up!"
+      : summary.suggestions
+          .map(
+            (s) =>
+              `• ${name(s.from)} → ${name(s.to)}: *${formatCents(s.amountCents, summary.currency)} ${summary.currency}*`,
+          )
+          .join("\n");
 
   const keyboard = new InlineKeyboard().webApp(
     "💰 Open SplitPay",
-    `${env.PUBLIC_URL}/?groupId=${expense.groupId}`,
+    `${env.PUBLIC_URL}/?groupId=${ctx.dbGroupId}`,
   );
 
-  const desc = expense.description ? ` for *${expense.description}*` : "";
-  await ctx.reply(
-    `✅ Recorded *${formatCents(expense.amountCents)} ${expense.currency}*${desc}, ` +
-      `split ${expense.participants.length} way(s).`,
-    { parse_mode: "Markdown", reply_markup: keyboard },
-  );
+  await ctx.reply(`✅ Recorded:\n${recorded}\n\n*Who pays whom:*\n${owed}`, {
+    parse_mode: "Markdown",
+    reply_markup: keyboard,
+  });
 }

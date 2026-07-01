@@ -10,12 +10,20 @@ export interface UserDTO {
   telegramId: string;
   username: string | null;
   firstName: string;
+  /** Connected TON wallet (set via the Mini App); null until connected. */
+  tonAddress: string | null;
 }
 
 export interface GroupDTO {
   id: string;
   title: string | null;
   members: UserDTO[];
+}
+
+export interface ExpenseShareDTO {
+  user: UserDTO;
+  amountCents: number;
+  description: string | null; // per-item label (e.g. "قورمه")
 }
 
 export interface ExpenseDTO {
@@ -26,6 +34,9 @@ export interface ExpenseDTO {
   currency: string;
   description: string | null;
   participants: UserDTO[];
+  shares: ExpenseShareDTO[];
+  /** How this expense was split; how the bot classified the source message. */
+  kind: "expense" | "debt" | "settlement";
   createdAt: string; // ISO 8601
 }
 
@@ -47,4 +58,48 @@ export interface GroupSummaryDTO {
   balances: BalanceDTO[];
   suggestions: SettlementSuggestion[];
   currency: string;
+  /** The open settlement for this group, if one is in progress. */
+  activeSettlement: SettlementDTO | null;
+}
+
+/** On-chain assets the escrow supports. */
+export type SettlementAsset = "TON" | "USDT";
+
+/**
+ * proposed  → collecting Done/agreements from involved members
+ * agreed    → everyone agreed; escrow deploy requested
+ * deployed  → escrow live on-chain, waiting for debtor deposits
+ * released  → contract funded and paid out to creditors; debts cleared
+ * cancelled → aborted before completion
+ */
+export type SettlementStatus =
+  | "proposed"
+  | "agreed"
+  | "deployed"
+  | "released"
+  | "cancelled";
+
+/** One debtor→creditor transfer in a settlement (snapshot of the graph). */
+export interface SettlementTransferDTO {
+  id: string;
+  from: UserDTO;
+  to: UserDTO;
+  amountCents: number;
+  paid: boolean;
+  txHash: string | null;
+}
+
+export interface SettlementDTO {
+  id: string;
+  groupId: string;
+  status: SettlementStatus;
+  asset: SettlementAsset;
+  transfers: SettlementTransferDTO[];
+  /** Members who must click Done: everyone appearing in a transfer. */
+  involved: UserDTO[];
+  /** User ids that have clicked Done. */
+  agreedUserIds: string[];
+  /** Escrow contract address once deployed. */
+  contractAddress: string | null;
+  createdAt: string;
 }

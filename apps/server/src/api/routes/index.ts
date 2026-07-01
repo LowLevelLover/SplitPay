@@ -1,9 +1,21 @@
 import type { FastifyInstance } from "fastify";
+import {
+  createExpenseSchema,
+  createSettlementSchema,
+  saveWalletSchema,
+} from "@split-pay/shared";
 import { authenticate } from "../auth/authenticate.js";
 import { assertMembership, getGroupDTO } from "../../services/groups.js";
 import { getGroupSummary } from "../../services/balances.js";
 import { createExpense, listExpenses } from "../../services/expenses.js";
-import { createExpenseSchema } from "@split-pay/shared";
+import { saveTonAddress } from "../../services/users.js";
+import {
+  agreeSettlement,
+  confirmCallerDeposit,
+  createSettlement,
+  getDepositInstruction,
+  getSettlement,
+} from "../../services/settlements.js";
 
 // Mini App REST routes under /api. Each authenticates via initData and checks
 // group membership before returning data.
@@ -15,7 +27,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
     return getGroupDTO(req.params.groupId);
   });
 
-  // Balances + settlement suggestions — the Mini App's main screen.
+  // Balances + settlement suggestions + active settlement — main screen.
   app.get<{ Params: { groupId: string } }>("/api/groups/:groupId/summary", async (req) => {
     const { userId } = await authenticate(req);
     await assertMembership(req.params.groupId, userId);
@@ -29,11 +41,51 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
     return listExpenses(req.params.groupId);
   });
 
-  // Create an expense from the Mini App.
+  // Create an expense from the Mini App (equal / percent / exact split).
   app.post("/api/expenses", async (req) => {
     const { userId } = await authenticate(req);
     const input = createExpenseSchema.parse(req.body);
     await assertMembership(input.groupId, userId);
     return createExpense(input);
+  });
+
+  // Save the caller's connected TON wallet.
+  app.post("/api/wallet", async (req) => {
+    const { userId } = await authenticate(req);
+    const { tonAddress } = saveWalletSchema.parse(req.body);
+    await saveTonAddress(userId, tonAddress);
+    return { ok: true };
+  });
+
+  // Open a settlement for the group's current balances.
+  app.post("/api/settlements", async (req) => {
+    const { userId } = await authenticate(req);
+    const input = createSettlementSchema.parse(req.body);
+    await assertMembership(input.groupId, userId);
+    return createSettlement(input.groupId, input.asset);
+  });
+
+  // Poll a settlement's state.
+  app.get<{ Params: { id: string } }>("/api/settlements/:id", async (req) => {
+    await authenticate(req);
+    return getSettlement(req.params.id);
+  });
+
+  // Click "Done" (agree). Deploys the escrow once everyone involved agrees.
+  app.post<{ Params: { id: string } }>("/api/settlements/:id/agree", async (req) => {
+    const { userId } = await authenticate(req);
+    return agreeSettlement(req.params.id, userId);
+  });
+
+  // Deposit instruction for the caller's part (TON Connect / deep link).
+  app.get<{ Params: { id: string } }>("/api/settlements/:id/deposit", async (req) => {
+    const { userId } = await authenticate(req);
+    return getDepositInstruction(req.params.id, userId);
+  });
+
+  // Confirm the caller funded their part (sim / manual path).
+  app.post<{ Params: { id: string } }>("/api/settlements/:id/deposit", async (req) => {
+    const { userId } = await authenticate(req);
+    return confirmCallerDeposit(req.params.id, userId);
   });
 }

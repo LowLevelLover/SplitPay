@@ -1,7 +1,14 @@
 // Wrapper over window.Telegram.WebApp (from telegram-web-app.js in index.html).
 
+interface TelegramUser {
+  id: number;
+  username?: string;
+  first_name: string;
+}
+
 interface TelegramWebApp {
   initData: string;
+  initDataUnsafe: { user?: TelegramUser };
   ready: () => void;
   expand: () => void;
   colorScheme: "light" | "dark";
@@ -33,4 +40,10 @@ export function getInitData(): string {
 /** groupId is passed by the bot's Mini App button as ?groupId=… */
 export function getGroupIdFromUrl(): string | null {
   return new URLSearchParams(window.location.search).get("groupId");
+}
+
+/** Current Telegram user (unsigned; used only to match against group members). */
+export function getCurrentTelegramId(): string | null {
+  const id = getWebApp()?.initDataUnsafe?.user?.id;
+  return id ? String(id) : null;
 }

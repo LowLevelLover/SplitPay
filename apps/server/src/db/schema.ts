@@ -1,15 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { relations } from "drizzle-orm";
-import { integer, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 // All money is integer minor units (cents).
 const id = () => text("id").primaryKey().$defaultFn(() => randomUUID());
 
 export const users = pgTable("users", {
   id: id(),
+  // For members mentioned before they message the bot, this holds a
+  // "pending:<username>" placeholder until they sign in and it's relinked.
   telegramId: text("telegram_id").notNull().unique(),
   username: text("username"),
   firstName: text("first_name").notNull(),
+  tonAddress: text("ton_address"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -39,8 +42,10 @@ export const expenses = pgTable("expenses", {
   groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
   payerId: text("payer_id").notNull().references(() => users.id),
   amountCents: integer("amount_cents").notNull(),
-  currency: text("currency").notNull().default("USD"),
+  currency: text("currency").notNull().default("IRT"),
   description: text("description"),
+  // expense = normal split | debt = direct "X owes Y" | settlement = on-chain payoff
+  kind: text("kind").notNull().default("expense"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -51,8 +56,45 @@ export const expenseShares = pgTable(
     expenseId: text("expense_id").notNull().references(() => expenses.id, { onDelete: "cascade" }),
     userId: text("user_id").notNull().references(() => users.id),
     amountCents: integer("amount_cents").notNull(),
+    description: text("description"), // per-item label from a ledger message
   },
   (t) => [unique().on(t.expenseId, t.userId)],
+);
+
+// A settlement snapshots the minimized debt graph and drives on-chain payoff.
+export const settlements = pgTable("settlements", {
+  id: id(),
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("proposed"),
+  asset: text("asset").notNull().default("TON"),
+  contractAddress: text("contract_address"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const settlementTransfers = pgTable("settlement_transfers", {
+  id: id(),
+  settlementId: text("settlement_id")
+    .notNull()
+    .references(() => settlements.id, { onDelete: "cascade" }),
+  fromUserId: text("from_user_id").notNull().references(() => users.id),
+  toUserId: text("to_user_id").notNull().references(() => users.id),
+  amountCents: integer("amount_cents").notNull(),
+  paid: boolean("paid").notNull().default(false),
+  txHash: text("tx_hash"),
+});
+
+// One row per involved member who clicked "Done".
+export const settlementAgreements = pgTable(
+  "settlement_agreements",
+  {
+    id: id(),
+    settlementId: text("settlement_id")
+      .notNull()
+      .references(() => settlements.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id),
+    agreedAt: timestamp("agreed_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.settlementId, t.userId)],
 );
 
 // Relations for the query API (db.query.*.findMany({ with: ... })).
@@ -77,6 +119,31 @@ export const expenseSharesRelations = relations(expenseShares, ({ one }) => ({
   user: one(users, { fields: [expenseShares.userId], references: [users.id] }),
 }));
 
+export const settlementsRelations = relations(settlements, ({ one, many }) => ({
+  group: one(groups, { fields: [settlements.groupId], references: [groups.id] }),
+  transfers: many(settlementTransfers),
+  agreements: many(settlementAgreements),
+}));
+
+export const settlementTransfersRelations = relations(settlementTransfers, ({ one }) => ({
+  settlement: one(settlements, {
+    fields: [settlementTransfers.settlementId],
+    references: [settlements.id],
+  }),
+  from: one(users, { fields: [settlementTransfers.fromUserId], references: [users.id] }),
+  to: one(users, { fields: [settlementTransfers.toUserId], references: [users.id] }),
+}));
+
+export const settlementAgreementsRelations = relations(settlementAgreements, ({ one }) => ({
+  settlement: one(settlements, {
+    fields: [settlementAgreements.settlementId],
+    references: [settlements.id],
+  }),
+  user: one(users, { fields: [settlementAgreements.userId], references: [users.id] }),
+}));
+
 export type User = typeof users.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
+export type Settlement = typeof settlements.$inferSelect;
+export type SettlementTransfer = typeof settlementTransfers.$inferSelect;
