@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateExpenseInput, CreateSettlementInput } from "@split-pay/shared";
+import type {
+  CreateExpenseInput,
+  CreateManualSettlementInput,
+  CreateSettlementInput,
+} from "@split-pay/shared";
 import { api } from "../lib/api.js";
 
 /** Group summary: members, balances, who-pays-whom, active settlement. */
@@ -61,6 +65,30 @@ export function useConfirmDeposit(groupId: string | null) {
   const invalidate = useGroupInvalidator(groupId);
   return useMutation({
     mutationFn: (id: string) => api.confirmDeposit(id),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateManualSettlement(groupId: string | null) {
+  const invalidate = useGroupInvalidator(groupId);
+  return useMutation({
+    mutationFn: (input: CreateManualSettlementInput) => api.createManualSettlement(input),
+    onSuccess: invalidate,
+  });
+}
+
+export function useConfirmManualSettlement(groupId: string | null) {
+  const invalidate = useGroupInvalidator(groupId);
+  return useMutation({
+    mutationFn: (id: string) => api.confirmManualSettlement(id),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRejectManualSettlement(groupId: string | null) {
+  const invalidate = useGroupInvalidator(groupId);
+  return useMutation({
+    mutationFn: (id: string) => api.rejectManualSettlement(id),
     onSuccess: invalidate,
   });
 }

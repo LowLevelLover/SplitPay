@@ -1,0 +1,48 @@
+.card {
+  position: relative;
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(180deg, var(--glass-strong), var(--glass)),
+    linear-gradient(180deg, rgba(20, 23, 51, 0.6), rgba(9, 9, 20, 0.5));
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  box-shadow: var(--shadow-2);
+  padding: var(--s-5);
+  animation: sp-rise var(--dur-slow) var(--ease-out) both;
+}
+
+/* Thin neon top edge — the "illuminated control panel" seam. */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(120deg, var(--edge, rgba(255, 255, 255, 0.14)), transparent 55%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.glow {
+  box-shadow: var(--shadow-2), var(--card-glow, none);
+}
+
+.interactive {
+  transition: border-color var(--dur-base) var(--ease-out);
+}
+@media (hover: hover) {
+  .interactive:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+}
+
+.pad-sm {
+  padding: var(--s-4);
+}
+.pad-none {
+  padding: 0;
+}

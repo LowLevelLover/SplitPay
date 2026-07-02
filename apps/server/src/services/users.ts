@@ -83,3 +83,11 @@ export async function getOrCreateUserByUsername(username: string): Promise<User>
 export async function saveTonAddress(userId: string, tonAddress: string): Promise<void> {
   await db.update(schema.users).set({ tonAddress }).where(eq(schema.users.id, userId));
 }
+
+/** Look up an existing user by their Telegram id (used by the dev-auth bypass). */
+export async function getUserByTelegramId(telegramId: string): Promise<User | null> {
+  const user = await db.query.users.findFirst({
+    where: eq(schema.users.telegramId, telegramId),
+  });
+  return user ?? null;
+}

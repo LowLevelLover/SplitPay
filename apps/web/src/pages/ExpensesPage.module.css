@@ -1,0 +1,80 @@
+.day {
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: var(--s-2) var(--s-2) 0;
+  margin-top: var(--s-2);
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+}
+.icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+}
+.iconExpense {
+  color: var(--cyan);
+  background: rgba(0, 229, 255, 0.08);
+}
+.iconDebt {
+  color: var(--orange);
+  background: rgba(255, 159, 67, 0.08);
+}
+.iconSettlement {
+  color: var(--success);
+  background: rgba(45, 255, 154, 0.08);
+}
+.info {
+  flex: 1;
+  min-width: 0;
+}
+.title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--fs-md);
+  color: var(--text);
+}
+.meta {
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.amount {
+  flex: none;
+  text-align: right;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-md);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.amountSettlement {
+  color: var(--success);
+  text-shadow: 0 0 14px rgba(45, 255, 154, 0.3);
+}
+.cur {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+.shares {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: var(--s-1);
+  border-top: 1px solid var(--hairline);
+}

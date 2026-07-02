@@ -1,0 +1,99 @@
+/* Fixed decorative atmosphere: retro sun over a receding neon grid. Never interactive. */
+.wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Vignette to keep edges dark and content legible over the scene.
+   Kept off the low-center horizon so the sun + grid stay visible. */
+.wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(150% 130% at 50% 30%, transparent 62%, rgba(5, 4, 13, 0.92) 100%);
+}
+
+.sun {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  width: 240px;
+  height: 240px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffd35c 0%, var(--orange) 26%, var(--pink) 62%, var(--purple) 100%);
+  opacity: 0.3;
+  filter: blur(0.4px);
+  animation: sp-pulse 6s var(--ease-in-out) infinite;
+  /* Classic outrun banding: widening horizontal gaps toward the base. */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 52%,
+    transparent 52%,
+    transparent 55%,
+    #000 55%,
+    #000 63%,
+    transparent 63%,
+    transparent 68%,
+    #000 68%,
+    #000 76%,
+    transparent 76%,
+    transparent 83%,
+    #000 83%,
+    #000 90%,
+    transparent 90%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 52%,
+    transparent 52%,
+    transparent 55%,
+    #000 55%,
+    #000 63%,
+    transparent 63%,
+    transparent 68%,
+    #000 68%,
+    #000 76%,
+    transparent 76%,
+    transparent 83%,
+    #000 83%,
+    #000 90%,
+    transparent 90%
+  );
+}
+
+/* Soft bloom behind the sun. */
+.halo {
+  position: absolute;
+  left: 50%;
+  bottom: 11%;
+  width: 360px;
+  height: 360px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 46, 151, 0.2), transparent 62%);
+  filter: blur(22px);
+}
+
+/* Receding neon grid — sits above the vignette so the horizon reads. */
+.grid {
+  position: absolute;
+  left: -42%;
+  right: -42%;
+  bottom: -11%;
+  height: 48%;
+  z-index: 1;
+  background-image:
+    linear-gradient(rgba(255, 46, 151, 0.72) 1.5px, transparent 1.5px),
+    linear-gradient(90deg, rgba(255, 46, 151, 0.66) 1.5px, transparent 1.5px);
+  background-size: 100% 58px, 76px 100%;
+  transform: perspective(560px) rotateX(63deg);
+  transform-origin: top center;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.22) 15%, #000 58%, rgba(0, 0, 0, 0.9) 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.22) 15%, #000 58%, rgba(0, 0, 0, 0.9) 100%);
+  filter: drop-shadow(0 0 7px rgba(255, 46, 151, 0.55));
+  opacity: 0.72;
+}

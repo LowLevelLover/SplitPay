@@ -1,15 +1,15 @@
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot } from "grammy";
 import type { SplitPayContext } from "../context.js";
 import { env } from "../../config/env.js";
 import { formatCents } from "../../lib/money.js";
 import { getGroupSummary } from "../../services/balances.js";
 import { createSettlement } from "../../services/settlements.js";
+import { miniAppKeyboard } from "../keyboard.js";
 
 const name = (u: { username: string | null; firstName: string }) =>
   u.username ? `@${u.username}` : u.firstName;
 
-const openApp = (groupId: string) =>
-  new InlineKeyboard().webApp("💰 Open SplitPay", `${env.PUBLIC_URL}/?groupId=${groupId}`);
+const openApp = miniAppKeyboard;
 
 /** Registers all slash commands on the bot. */
 export function registerCommands(bot: Bot<SplitPayContext>): void {
@@ -17,7 +17,7 @@ export function registerCommands(bot: Bot<SplitPayContext>): void {
     await ctx.reply(
       "👋 *SplitPay* — I track who owes whom, then settle up on TON.\n\n" +
         "Mention me with expenses, e.g.\n" +
-        `\`@${ctx.me.username} @ali paid 60000 dinner\`\n\n` +
+        `\`@${env.BOT_USERNAME} @ali paid 60000 dinner\`\n\n` +
         "or a full ledger:\n" +
         "`@ali -50000 kabab, +150000 paid`\n`@bob -100000 pizza`\n\n" +
         "Then /balance to see the graph, /settle to pay on-chain.",
@@ -29,8 +29,8 @@ export function registerCommands(bot: Bot<SplitPayContext>): void {
     await ctx.reply(
       "*How to use SplitPay*\n\n" +
         "Record (mention me), any of:\n" +
-        `• \`@${ctx.me.username} @ali paid 60000 dinner @bob\` — equal split\n` +
-        `• \`@${ctx.me.username} @ali should pay @bob 50000\` — direct debt\n` +
+        `• \`@${env.BOT_USERNAME} @ali paid 60000 dinner @bob\` — equal split\n` +
+        `• \`@${env.BOT_USERNAME} @ali should pay @bob 50000\` — direct debt\n` +
         `• ledger lines \`@ali -50000 kabab, +150000 paid\`\n\n` +
         "• /balance — balances & who pays whom\n" +
         "• /settle — start an on-chain settlement (TON escrow)\n" +

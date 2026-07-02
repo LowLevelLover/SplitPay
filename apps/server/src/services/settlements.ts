@@ -4,6 +4,7 @@ import { db, schema } from "../db/client.js";
 import { AppError } from "../lib/errors.js";
 import { computeBalances } from "./balances.js";
 import { minimizeTransactions } from "./settlement.js";
+import { convert } from "./prices.js";
 import { toUserDTO } from "./users.js";
 import { escrowProvider, type DepositInstruction, type EscrowPlan } from "./ton/index.js";
 import type { Settlement, SettlementTransfer, User } from "../db/schema.js";
@@ -15,12 +16,40 @@ type FullSettlement = Settlement & {
 
 const OPEN: SettlementStatus[] = ["proposed", "agreed", "deployed"];
 
-function toSettlementDTO(s: FullSettlement): SettlementDTO {
+async function groupCurrency(groupId: string): Promise<string> {
+  const g = await db.query.groups.findFirst({ where: eq(schema.groups.id, groupId) });
+  return g?.currency ?? "IRT";
+}
+
+// Debts live in the group's fiat currency (integer cents). Convert to the
+// settlement asset's minor units (2dp) at live market prices — for display and
+// on-chain amounts alike. The DB stays fiat so balances still net to zero.
+async function toAssetCents(
+  amountCents: number,
+  currency: string,
+  asset: SettlementAsset,
+): Promise<number> {
+  const units = await convert(amountCents / 100, currency, asset);
+  return Math.round(units * 100);
+}
+
+async function toSettlementDTO(s: FullSettlement): Promise<SettlementDTO> {
+  const currency = await groupCurrency(s.groupId);
   const involved = new Map<string, User>();
   for (const t of s.transfers) {
     involved.set(t.from.id, t.from);
     involved.set(t.to.id, t.to);
   }
+  const transfers = await Promise.all(
+    s.transfers.map(async (t) => ({
+      id: t.id,
+      from: toUserDTO(t.from),
+      to: toUserDTO(t.to),
+      amountCents: await toAssetCents(t.amountCents, currency, s.asset as SettlementAsset),
+      paid: t.paid,
+      txHash: t.txHash,
+    })),
+  );
   return {
     id: s.id,
     groupId: s.groupId,
@@ -28,14 +57,7 @@ function toSettlementDTO(s: FullSettlement): SettlementDTO {
     asset: s.asset as SettlementAsset,
     contractAddress: s.contractAddress,
     createdAt: s.createdAt.toISOString(),
-    transfers: s.transfers.map((t) => ({
-      id: t.id,
-      from: toUserDTO(t.from),
-      to: toUserDTO(t.to),
-      amountCents: t.amountCents,
-      paid: t.paid,
-      txHash: t.txHash,
-    })),
+    transfers,
     involved: [...involved.values()].map(toUserDTO),
     agreedUserIds: s.agreements.map((a) => a.userId),
   };
@@ -60,7 +82,7 @@ async function findOpen(groupId: string): Promise<FullSettlement | null> {
 
 export async function getActiveSettlement(groupId: string): Promise<SettlementDTO | null> {
   const s = await findOpen(groupId);
-  return s ? toSettlementDTO(s) : null;
+  return s ? await toSettlementDTO(s) : null;
 }
 
 /** Snapshot the current minimized debt graph into a new settlement. */
@@ -69,7 +91,7 @@ export async function createSettlement(
   asset: SettlementAsset,
 ): Promise<SettlementDTO> {
   const existing = await findOpen(groupId);
-  if (existing) return toSettlementDTO(existing); // one open settlement at a time
+  if (existing) return await toSettlementDTO(existing); // one open settlement at a time
 
   const balances = await computeBalances(groupId);
   const transfers = minimizeTransactions(balances);
@@ -91,7 +113,7 @@ export async function createSettlement(
     return s!.id;
   });
 
-  return toSettlementDTO(await load(settlementId));
+  return await toSettlementDTO(await load(settlementId));
 }
 
 /** Record a member's "Done". When all involved agree, deploy the escrow. */
@@ -100,7 +122,7 @@ export async function agreeSettlement(
   userId: string,
 ): Promise<SettlementDTO> {
   const s = await load(settlementId);
-  if (s.status !== "proposed") return toSettlementDTO(s); // already moving forward
+  if (s.status !== "proposed") return await toSettlementDTO(s); // already moving forward
 
   const involved = new Set(s.transfers.flatMap((t) => [t.fromUserId, t.toUserId]));
   if (!involved.has(userId)) throw new AppError("You are not part of this settlement", 403);
@@ -114,20 +136,21 @@ export async function agreeSettlement(
   const allAgreed = [...involved].every((id) => agreed.has(id));
   if (allAgreed) await deploy(settlementId);
 
-  return toSettlementDTO(await load(settlementId));
+  return await toSettlementDTO(await load(settlementId));
 }
 
 async function toPlan(s: FullSettlement): Promise<EscrowPlan> {
-  return {
-    settlementId: s.id,
-    asset: s.asset as SettlementAsset,
-    transfers: s.transfers.map((t) => ({
+  const currency = await groupCurrency(s.groupId);
+  const asset = s.asset as SettlementAsset;
+  const transfers = await Promise.all(
+    s.transfers.map(async (t) => ({
       transferId: t.id,
       fromUserId: t.fromUserId,
       toAddress: t.to.tonAddress ?? null,
-      amountCents: t.amountCents,
+      amountCents: await toAssetCents(t.amountCents, currency, asset),
     })),
-  };
+  );
+  return { settlementId: s.id, asset, transfers };
 }
 
 /** All agreed → deploy escrow, then watch for funding. */
@@ -210,7 +233,7 @@ export async function markReleased(settlementId: string): Promise<void> {
 }
 
 export async function getSettlement(settlementId: string): Promise<SettlementDTO> {
-  return toSettlementDTO(await load(settlementId));
+  return await toSettlementDTO(await load(settlementId));
 }
 
 /** The deposit the caller (a debtor) must make into the escrow, if any. */
@@ -222,7 +245,9 @@ export async function getDepositInstruction(
   if (!s.contractAddress) return null;
   const t = s.transfers.find((t) => t.fromUserId === userId && !t.paid);
   if (!t) return null;
-  return escrowProvider.depositFor(s.contractAddress, t.id, t.amountCents, s.asset as SettlementAsset);
+  const asset = s.asset as SettlementAsset;
+  const cents = await toAssetCents(t.amountCents, await groupCurrency(s.groupId), asset);
+  return escrowProvider.depositFor(s.contractAddress, t.id, cents, asset);
 }
 
 /** Mark the caller's own transfer as funded (sim / manual confirmation path). */
@@ -235,7 +260,7 @@ export async function confirmCallerDeposit(
   const t = s.transfers.find((t) => t.fromUserId === userId);
   if (!t) throw new AppError("You have nothing to pay in this settlement", 403);
   await markTransferPaid(t.id, null);
-  return toSettlementDTO(await load(settlementId));
+  return await toSettlementDTO(await load(settlementId));
 }
 
 /** Only involved debtors/creditors, plus abort helper. */

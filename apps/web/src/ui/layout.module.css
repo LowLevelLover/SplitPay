@@ -1,0 +1,123 @@
+/* Page scaffold */
+.screen {
+  min-height: 100vh;
+  padding: calc(var(--safe-t) + var(--s-5)) var(--s-4)
+    calc(var(--nav-h) + var(--safe-b) + var(--s-8));
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: var(--s-2) var(--s-1) var(--s-5);
+}
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-xl);
+  letter-spacing: 0.02em;
+  margin: 2px 0 0;
+  color: var(--text);
+}
+
+/* Vertical rhythm between cards/sections */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+/* Labelled group */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--s-2);
+}
+.sectionLabel {
+  font-family: var(--font-heading);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  text-shadow: 0 0 12px rgba(0, 229, 255, 0.35);
+}
+.footer {
+  padding: 0 var(--s-2);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* Row inside a card list */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) 0;
+  min-height: 52px;
+}
+.row + .row {
+  border-top: 1px solid var(--hairline);
+}
+.rowMultiline {
+  align-items: flex-start;
+}
+.before {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--r-sm);
+  background: var(--glass-strong);
+  border: 1px solid var(--hairline);
+  color: var(--text-dim);
+}
+.body {
+  flex: 1;
+  min-width: 0;
+}
+.rowTitle {
+  font-weight: 600;
+  font-size: var(--fs-base);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rowSub {
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.rowSubClamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.after {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

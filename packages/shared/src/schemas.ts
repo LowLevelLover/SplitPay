@@ -21,6 +21,16 @@ export const splitInputSchema = z.discriminatedUnion("strategy", [
       .array(z.object({ userId: z.string().min(1), amountCents: z.number().int().nonnegative() }))
       .min(1),
   }),
+  // Proportional integer/decimal weights (e.g. 2 nights → 2, family of 3 → 3).
+  z.object({
+    strategy: z.literal("shares"),
+    shares: z.array(z.object({ userId: z.string().min(1), shares: z.number().positive() })).min(1),
+  }),
+  // Per-person extra (signed); the remainder after adjustments is split equally.
+  z.object({
+    strategy: z.literal("adjustment"),
+    shares: z.array(z.object({ userId: z.string().min(1), adjustmentCents: z.number().int() })).min(1),
+  }),
 ]);
 
 export type SplitInput = z.infer<typeof splitInputSchema>;
@@ -51,3 +61,13 @@ export const createSettlementSchema = z.object({
 });
 
 export type CreateSettlementInput = z.infer<typeof createSettlementSchema>;
+
+/** Record a manual off-app settle-up: caller says they paid `toUserId`. */
+export const createManualSettlementSchema = z.object({
+  groupId: z.string().min(1),
+  toUserId: z.string().min(1),
+  amountCents: z.number().int().positive(),
+  note: z.string().max(200).nullish(),
+});
+
+export type CreateManualSettlementInput = z.infer<typeof createManualSettlementSchema>;

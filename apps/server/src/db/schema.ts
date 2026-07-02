@@ -97,6 +97,22 @@ export const settlementAgreements = pgTable(
   (t) => [unique().on(t.settlementId, t.userId)],
 );
 
+// A manual (off-app) settle-up: one member says they paid another directly
+// (cash/transfer). Pending until the recipient confirms; on confirm it spawns an
+// offsetting "settlement" expense so balances net down. Kept off the on-chain path.
+export const manualSettlements = pgTable("manual_settlements", {
+  id: id(),
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  fromUserId: text("from_user_id").notNull().references(() => users.id),
+  toUserId: text("to_user_id").notNull().references(() => users.id),
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").notNull().default("IRT"),
+  status: text("status").notNull().default("pending"), // pending | confirmed | rejected
+  note: text("note"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  confirmedAt: timestamp("confirmed_at"),
+});
+
 // Relations for the query API (db.query.*.findMany({ with: ... })).
 export const groupsRelations = relations(groups, ({ many }) => ({
   members: many(groupMembers),
@@ -142,7 +158,14 @@ export const settlementAgreementsRelations = relations(settlementAgreements, ({ 
   user: one(users, { fields: [settlementAgreements.userId], references: [users.id] }),
 }));
 
+export const manualSettlementsRelations = relations(manualSettlements, ({ one }) => ({
+  group: one(groups, { fields: [manualSettlements.groupId], references: [groups.id] }),
+  from: one(users, { fields: [manualSettlements.fromUserId], references: [users.id] }),
+  to: one(users, { fields: [manualSettlements.toUserId], references: [users.id] }),
+}));
+
 export type User = typeof users.$inferSelect;
+export type ManualSettlement = typeof manualSettlements.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 export type Settlement = typeof settlements.$inferSelect;

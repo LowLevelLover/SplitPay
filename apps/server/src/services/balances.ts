@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "../db/client.js";
 import { AppError } from "../lib/errors.js";
 import { getGroupDTO } from "./groups.js";
+import { listManualSettlements } from "./manualSettlements.js";
 import { minimizeTransactions } from "./settlement.js";
 import { getActiveSettlement } from "./settlements.js";
 import { toUserDTO } from "./users.js";
@@ -42,11 +43,12 @@ export async function computeBalances(groupId: string): Promise<BalanceDTO[]> {
 
 /** Everything the Mini App needs for a group. */
 export async function getGroupSummary(groupId: string): Promise<GroupSummaryDTO> {
-  const [group, balances, dbGroup, activeSettlement] = await Promise.all([
+  const [group, balances, dbGroup, activeSettlement, manualSettlements] = await Promise.all([
     getGroupDTO(groupId),
     computeBalances(groupId),
     db.query.groups.findFirst({ where: eq(schema.groups.id, groupId) }),
     getActiveSettlement(groupId),
+    listManualSettlements(groupId),
   ]);
 
   return {
@@ -55,5 +57,6 @@ export async function getGroupSummary(groupId: string): Promise<GroupSummaryDTO>
     suggestions: minimizeTransactions(balances),
     currency: dbGroup?.currency ?? "IRT",
     activeSettlement,
+    manualSettlements,
   };
 }

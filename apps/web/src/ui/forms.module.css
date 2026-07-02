@@ -1,0 +1,157 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.label {
+  font-family: var(--font-heading);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-left: 2px;
+}
+
+.control {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-md);
+  background: rgba(5, 4, 13, 0.55);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  font-size: var(--fs-md);
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    background var(--dur-base) var(--ease-out);
+  appearance: none;
+}
+.control::placeholder {
+  color: var(--text-muted);
+}
+.control:focus {
+  outline: none;
+  border-color: rgba(0, 229, 255, 0.6);
+  background: rgba(0, 229, 255, 0.04);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.35), 0 0 22px rgba(0, 229, 255, 0.18);
+}
+
+/* Big numeric input (amount) leans on the display face. */
+.amount {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-xl);
+  letter-spacing: 0.01em;
+}
+
+.selectWrap {
+  position: relative;
+}
+.selectWrap select {
+  padding-right: var(--s-10);
+  cursor: pointer;
+}
+.chevron {
+  position: absolute;
+  right: var(--s-4);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--cyan);
+  pointer-events: none;
+}
+
+/* Segmented control */
+.segment {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-md);
+  background: rgba(5, 4, 13, 0.55);
+  border: 1px solid var(--glass-border);
+}
+.segItem {
+  min-height: 40px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+.segItem[aria-selected="true"] {
+  color: #14030c;
+  background: linear-gradient(180deg, #ff67b4, var(--pink));
+  box-shadow: var(--glow-pink);
+}
+
+/* Neon checkbox */
+.check {
+  --sz: 24px;
+  position: relative;
+  width: var(--sz);
+  height: var(--sz);
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+.check input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.box {
+  width: var(--sz);
+  height: var(--sz);
+  border-radius: 7px;
+  border: 1.5px solid var(--text-muted);
+  color: transparent;
+  display: grid;
+  place-items: center;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.check input:checked + .box {
+  border-color: var(--cyan);
+  background: rgba(0, 229, 255, 0.16);
+  color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+.check input:focus-visible + .box {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* Small trailing numeric input (per-person split values) */
+.mini {
+  width: 92px;
+  min-height: 40px;
+  text-align: right;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-sm);
+  background: rgba(5, 4, 13, 0.6);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  appearance: none;
+}
+.mini:focus {
+  outline: none;
+  border-color: rgba(255, 46, 151, 0.6);
+  box-shadow: 0 0 16px rgba(255, 46, 151, 0.2);
+}

@@ -1,11 +1,13 @@
 import type {
   CreateExpenseInput,
+  CreateManualSettlementInput,
   CreateSettlementInput,
   ExpenseDTO,
   GroupSummaryDTO,
+  ManualSettlementDTO,
   SettlementDTO,
 } from "@split-pay/shared";
-import { getInitData } from "./telegram.js";
+import { getDevUser, getInitData } from "./telegram.js";
 
 /** Deposit instruction for a debtor (from GET /settlements/:id/deposit). */
 export interface DepositInstruction {
@@ -16,12 +18,14 @@ export interface DepositInstruction {
 }
 
 // Fetch wrapper: every request carries initData in X-Init-Data for auth.
+// In the local admin panel (?devUser=…) it sends X-Dev-User instead.
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const devUser = getDevUser();
   const res = await fetch(path, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "X-Init-Data": getInitData(),
+      ...(devUser ? { "X-Dev-User": devUser } : { "X-Init-Data": getInitData() }),
       ...options.headers,
     },
   });
@@ -59,4 +63,16 @@ export const api = {
 
   confirmDeposit: (id: string) =>
     request<SettlementDTO>(`/api/settlements/${id}/deposit`, { method: "POST" }),
+
+  createManualSettlement: (input: CreateManualSettlementInput) =>
+    request<ManualSettlementDTO>(`/api/settlements/manual`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  confirmManualSettlement: (id: string) =>
+    request<ManualSettlementDTO>(`/api/settlements/manual/${id}/confirm`, { method: "POST" }),
+
+  rejectManualSettlement: (id: string) =>
+    request<ManualSettlementDTO>(`/api/settlements/manual/${id}/reject`, { method: "POST" }),
 };

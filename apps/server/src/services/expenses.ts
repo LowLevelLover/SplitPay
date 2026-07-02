@@ -2,10 +2,10 @@ import type { ExpenseDTO, SplitInput } from "@split-pay/shared";
 import { desc, eq } from "drizzle-orm";
 import { db, schema } from "../db/client.js";
 import { AppError } from "../lib/errors.js";
-import { splitByWeights, splitEvenly } from "../lib/money.js";
+import { formatCents, splitByWeights, splitEvenly } from "../lib/money.js";
 import { ensureMembership } from "./groups.js";
 import { getOrCreateUserByUsername, toUserDTO } from "./users.js";
-import type { ParsedOp } from "../bot/parser/expense.js";
+import type { ParsedOp, SplitStrategy } from "../bot/parser/expense.js";
 import type { User } from "../db/schema.js";
 
 type ExpenseRow = typeof schema.expenses.$inferSelect & {
@@ -36,7 +36,9 @@ function toExpenseDTO(e: ExpenseRow): ExpenseDTO {
 function resolveShares(
   totalCents: number,
   split: SplitInput,
+  currency: string,
 ): { userId: string; amountCents: number }[] {
+  const fmt = (c: number) => `${formatCents(c, currency)} ${currency}`;
   if (split.strategy === "equal") {
     const amounts = splitEvenly(totalCents, split.participantIds.length);
     return split.participantIds.map((userId, i) => ({ userId, amountCents: amounts[i]! }));
@@ -48,10 +50,25 @@ function resolveShares(
     );
     return split.shares.map((s, i) => ({ userId: s.userId, amountCents: amounts[i]! }));
   }
+  if (split.strategy === "shares") {
+    const amounts = splitByWeights(
+      totalCents,
+      split.shares.map((s) => s.shares),
+    );
+    return split.shares.map((s, i) => ({ userId: s.userId, amountCents: amounts[i]! }));
+  }
+  if (split.strategy === "adjustment") {
+    // Everyone owes an equal slice of what's left after the fixed adjustments.
+    const totalAdj = split.shares.reduce((a, s) => a + s.adjustmentCents, 0);
+    const remainder = totalCents - totalAdj;
+    if (remainder < 0) throw new AppError(`Adjustments (${fmt(totalAdj)}) exceed the total (${fmt(totalCents)})`);
+    const base = splitEvenly(remainder, split.shares.length);
+    return split.shares.map((s, i) => ({ userId: s.userId, amountCents: base[i]! + s.adjustmentCents }));
+  }
   // exact
   const sum = split.shares.reduce((a, s) => a + s.amountCents, 0);
   if (sum !== totalCents) {
-    throw new AppError(`Exact shares (${sum}) must sum to the total (${totalCents})`);
+    throw new AppError(`Exact shares (${fmt(sum)}) must sum to the total (${fmt(totalCents)})`);
   }
   return split.shares.map((s) => ({ userId: s.userId, amountCents: s.amountCents }));
 }
@@ -113,13 +130,14 @@ export async function createExpense(input: {
   description?: string | null;
   split: SplitInput;
 }): Promise<ExpenseDTO> {
-  const shares = resolveShares(input.amountCents, input.split);
+  const currency = input.currency ?? "IRT";
+  const shares = resolveShares(input.amountCents, input.split, currency);
   if (shares.length === 0) throw new AppError("An expense needs at least one participant");
   const id = await insertExpense({
     groupId: input.groupId,
     payerId: input.payerId,
     amountCents: input.amountCents,
-    currency: input.currency ?? "IRT",
+    currency,
     description: input.description,
     shares,
   });
@@ -136,6 +154,55 @@ export async function listExpenses(groupId: string): Promise<ExpenseDTO[]> {
 }
 
 /**
+ * Turn a parsed split (strategy + per-user values keyed by id) into a SplitInput.
+ * The payer is always a participant: an explicit value wins, otherwise they take
+ * an equal/remainder share (equal, adjustment, exact) or nothing (percent, shares).
+ */
+async function buildSplit(
+  groupId: string,
+  strategy: SplitStrategy,
+  payerId: string,
+  byId: Map<string, number>,
+  amountCents: number,
+): Promise<SplitInput> {
+  if (strategy === "percent")
+    return {
+      strategy: "percent",
+      shares: [...byId].filter(([, v]) => v > 0).map(([userId, v]) => ({ userId, percent: v })),
+    };
+  if (strategy === "shares")
+    return {
+      strategy: "shares",
+      shares: [...byId].filter(([, v]) => v > 0).map(([userId, v]) => ({ userId, shares: v })),
+    };
+  if (strategy === "exact") {
+    // Payer covers whatever the named exact shares don't (the remainder).
+    if (!byId.has(payerId)) {
+      const named = [...byId.values()].reduce((a, v) => a + v, 0);
+      byId.set(payerId, Math.max(0, amountCents - named));
+    }
+    return { strategy: "exact", shares: [...byId].map(([userId, v]) => ({ userId, amountCents: v })) };
+  }
+  if (strategy === "adjustment") {
+    if (!byId.has(payerId)) byId.set(payerId, 0);
+    return {
+      strategy: "adjustment",
+      shares: [...byId].map(([userId, v]) => ({ userId, adjustmentCents: v })),
+    };
+  }
+  // equal — named participants, or the whole group when none were named.
+  let ids = [...byId.keys()];
+  if (ids.length === 0) {
+    const members = await db.query.groupMembers.findMany({
+      where: eq(schema.groupMembers.groupId, groupId),
+    });
+    ids = members.map((m) => m.userId);
+  }
+  if (!ids.includes(payerId)) ids.push(payerId);
+  return { strategy: "equal", participantIds: ids };
+}
+
+/**
  * Apply the operations parsed from a bot-mention message. Each op names its own
  * payer/participants; unknown @usernames become pending members.
  */
@@ -144,19 +211,12 @@ export async function applyParsedOps(groupId: string, ops: ParsedOp[]): Promise<
   const resolve = async (username: string) => (await getOrCreateUserByUsername(username)).id;
 
   for (const op of ops) {
-    if (op.kind === "equal") {
+    if (op.kind === "split") {
       const payerId = await resolve(op.payerUsername);
-      let participantIds: string[];
-      if (op.participantUsernames.length) {
-        participantIds = await Promise.all(op.participantUsernames.map(resolve));
-        if (!participantIds.includes(payerId)) participantIds.push(payerId);
-      } else {
-        const members = await db.query.groupMembers.findMany({
-          where: eq(schema.groupMembers.groupId, groupId),
-        });
-        participantIds = members.map((m) => m.userId);
-        if (!participantIds.includes(payerId)) participantIds.push(payerId);
-      }
+      // Resolve participants → ids, keeping the last value if one appears twice.
+      const byId = new Map<string, number>();
+      for (const p of op.participants) byId.set(await resolve(p.username), p.value);
+      const split = await buildSplit(groupId, op.strategy, payerId, byId, op.amountCents);
       created.push(
         await createExpense({
           groupId,
@@ -164,7 +224,7 @@ export async function applyParsedOps(groupId: string, ops: ParsedOp[]): Promise<
           amountCents: op.amountCents,
           currency: op.currency,
           description: op.description,
-          split: { strategy: "equal", participantIds },
+          split,
         }),
       );
     } else if (op.kind === "debt") {
@@ -180,9 +240,10 @@ export async function applyParsedOps(groupId: string, ops: ParsedOp[]): Promise<
         shares: [{ userId: fromId, amountCents: op.amountCents }],
       });
       created.push(await loadExpense(id));
-    } else {
+    } else if (op.kind === "ledger") {
       created.push(...(await applyLedger(groupId, op.entries, op.currency)));
     }
+    // "settle" ops are handled in the bot layer (they need recipient approval).
   }
 
   return created;
@@ -221,6 +282,8 @@ async function applyLedger(
   if (totalPaid === 0) throw new AppError("Ledger has no payments (need a +amount somewhere)");
 
   const consumers = [...consumed.entries()].filter(([, c]) => c > 0);
+  if (consumers.length === 0)
+    throw new AppError("I see payments but no one's consumption — add -amounts, or drop the + to split equally.");
   const created: ExpenseDTO[] = [];
 
   for (const [payerId, paidCents] of paid) {

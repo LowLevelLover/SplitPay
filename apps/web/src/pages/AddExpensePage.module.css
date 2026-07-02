@@ -1,0 +1,32 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+}
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: rgba(255, 92, 122, 0.1);
+  border: 1px solid rgba(255, 92, 122, 0.4);
+  color: var(--error);
+  font-size: var(--fs-sm);
+  animation: sp-rise var(--dur-base) var(--ease-out) both;
+}
+.submit {
+  position: sticky;
+  bottom: calc(var(--nav-h) + var(--safe-b) + var(--s-3));
+  margin-top: var(--s-2);
+}
+.hint {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  text-align: right;
+}

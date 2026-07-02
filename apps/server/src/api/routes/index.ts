@@ -1,11 +1,14 @@
 import type { FastifyInstance } from "fastify";
+import type { Bot } from "grammy";
 import {
   createExpenseSchema,
+  createManualSettlementSchema,
   createSettlementSchema,
   saveWalletSchema,
 } from "@split-pay/shared";
+import type { SplitPayContext } from "../../bot/context.js";
 import { authenticate } from "../auth/authenticate.js";
-import { assertMembership, getGroupDTO } from "../../services/groups.js";
+import { assertMembership, getGroupChatId, getGroupDTO } from "../../services/groups.js";
 import { getGroupSummary } from "../../services/balances.js";
 import { createExpense, listExpenses } from "../../services/expenses.js";
 import { saveTonAddress } from "../../services/users.js";
@@ -16,10 +19,19 @@ import {
   getDepositInstruction,
   getSettlement,
 } from "../../services/settlements.js";
+import {
+  confirmManualSettlement,
+  createManualSettlement,
+  rejectManualSettlement,
+} from "../../services/manualSettlements.js";
+import { sendManualSettlementRequest } from "../../bot/notify.js";
 
 // Mini App REST routes under /api. Each authenticates via initData and checks
 // group membership before returning data.
-export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
+export async function registerApiRoutes(
+  app: FastifyInstance,
+  bot: Bot<SplitPayContext>,
+): Promise<void> {
   // Group profile + members.
   app.get<{ Params: { groupId: string } }>("/api/groups/:groupId", async (req) => {
     const { userId } = await authenticate(req);
@@ -87,5 +99,41 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { id: string } }>("/api/settlements/:id/deposit", async (req) => {
     const { userId } = await authenticate(req);
     return confirmCallerDeposit(req.params.id, userId);
+  });
+
+  // ── Manual (off-app) settle-ups ─────────────────────────────────────────────
+  // Record "I paid X" as pending, then ask the recipient (via bot) to confirm.
+  app.post("/api/settlements/manual", async (req) => {
+    const { userId } = await authenticate(req);
+    const input = createManualSettlementSchema.parse(req.body);
+    await assertMembership(input.groupId, userId);
+    const dto = await createManualSettlement({
+      groupId: input.groupId,
+      fromUserId: userId,
+      toUserId: input.toUserId,
+      amountCents: input.amountCents,
+      note: input.note ?? null,
+    });
+    const chatId = await getGroupChatId(input.groupId);
+    if (chatId) {
+      try {
+        await sendManualSettlementRequest(bot.api, dto, chatId);
+      } catch (err) {
+        app.log.warn({ err }, "settle-up approval message failed");
+      }
+    }
+    return dto;
+  });
+
+  // Recipient confirms a settle-up → clears the debt.
+  app.post<{ Params: { id: string } }>("/api/settlements/manual/:id/confirm", async (req) => {
+    const { userId } = await authenticate(req);
+    return confirmManualSettlement(req.params.id, userId);
+  });
+
+  // Recipient rejects a settle-up.
+  app.post<{ Params: { id: string } }>("/api/settlements/manual/:id/reject", async (req) => {
+    const { userId } = await authenticate(req);
+    return rejectManualSettlement(req.params.id, userId);
   });
 }

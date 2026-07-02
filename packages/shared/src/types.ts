@@ -53,6 +53,22 @@ export interface SettlementSuggestion {
   amountCents: number;
 }
 
+export type ManualSettlementStatus = "pending" | "confirmed" | "rejected";
+
+/** An off-app payment one member says they made to another; needs the recipient's OK. */
+export interface ManualSettlementDTO {
+  id: string;
+  groupId: string;
+  from: UserDTO;
+  to: UserDTO;
+  amountCents: number;
+  currency: string;
+  status: ManualSettlementStatus;
+  note: string | null;
+  createdAt: string; // ISO 8601
+  confirmedAt: string | null;
+}
+
 export interface GroupSummaryDTO {
   group: GroupDTO;
   balances: BalanceDTO[];
@@ -60,6 +76,8 @@ export interface GroupSummaryDTO {
   currency: string;
   /** The open settlement for this group, if one is in progress. */
   activeSettlement: SettlementDTO | null;
+  /** Manual off-app settle-ups (pending/confirmed/rejected), most recent first. */
+  manualSettlements: ManualSettlementDTO[];
 }
 
 /** On-chain assets the escrow supports. */

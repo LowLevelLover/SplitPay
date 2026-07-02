@@ -37,13 +37,18 @@ export function getInitData(): string {
   return getWebApp()?.initData ?? "";
 }
 
-/** groupId is passed by the bot's Mini App button as ?groupId=… */
+/** groupId is passed by the bot's "Open SplitPay" button as ?groupId=… */
 export function getGroupIdFromUrl(): string | null {
   return new URLSearchParams(window.location.search).get("groupId");
+}
+
+/** Dev-only: ?devUser=<telegramId> from the local /admin panel (no Telegram). */
+export function getDevUser(): string | null {
+  return new URLSearchParams(window.location.search).get("devUser");
 }
 
 /** Current Telegram user (unsigned; used only to match against group members). */
 export function getCurrentTelegramId(): string | null {
   const id = getWebApp()?.initDataUnsafe?.user?.id;
-  return id ? String(id) : null;
+  return id ? String(id) : getDevUser();
 }

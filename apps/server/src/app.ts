@@ -3,9 +3,10 @@ import { webhookCallback } from "grammy";
 import type { Bot } from "grammy";
 import { ZodError } from "zod";
 import type { SplitPayContext } from "./bot/context.js";
-import { isProd } from "./config/env.js";
+import { env, isProd } from "./config/env.js";
 import { AppError } from "./lib/errors.js";
 import { registerApiRoutes } from "./api/routes/index.js";
+import { registerAdminRoutes } from "./api/routes/admin.js";
 import { registerStatic } from "./web/static.js";
 
 // Single Fastify server: /webhook (bot) + /api/* (REST) + /* (Mini App static).
@@ -28,10 +29,14 @@ export async function buildApp(bot: Bot<SplitPayContext>) {
 
   app.get("/health", async () => ({ ok: true }));
 
-  // Telegram webhook — grammY handles the update.
-  app.post("/webhook", webhookCallback(bot, "fastify"));
+  // Telegram webhook — only in webhook mode. Registering the callback marks the
+  // bot as webhook-started, which would block bot.start() long polling.
+  if (env.BOT_MODE === "webhook") {
+    app.post("/webhook", webhookCallback(bot, "fastify"));
+  }
 
-  await registerApiRoutes(app);
+  await registerApiRoutes(app, bot);
+  await registerAdminRoutes(app); // dev-only /admin panel
   await registerStatic(app); // must be last (registers the catch-all)
 
   return app;

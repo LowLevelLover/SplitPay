@@ -1,0 +1,95 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 48px;
+  padding: 0 var(--s-5);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--fs-base);
+  letter-spacing: 0.01em;
+  color: var(--text);
+  background: transparent;
+  transition:
+    box-shadow var(--dur-base) var(--ease-out),
+    filter var(--dur-base) var(--ease-out),
+    background var(--dur-base) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.btn:active {
+  filter: brightness(0.95);
+}
+.btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.stretched {
+  width: 100%;
+}
+.sm {
+  min-height: 38px;
+  padding: 0 var(--s-4);
+  font-size: var(--fs-sm);
+  border-radius: var(--r-sm);
+}
+
+/* Primary — neon pink, softly lit. */
+.primary {
+  color: #14030c;
+  background: linear-gradient(180deg, #ff67b4, var(--pink));
+  box-shadow: var(--glow-pink), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  font-weight: 700;
+}
+@media (hover: hover) {
+  .primary:hover {
+    filter: brightness(1.08) saturate(1.05);
+    box-shadow: 0 0 16px rgba(255, 46, 151, 0.5), 0 0 30px rgba(255, 46, 151, 0.16);
+  }
+}
+
+/* Secondary — cyan outline. */
+.secondary {
+  color: var(--cyan);
+  border-color: rgba(0, 229, 255, 0.5);
+  background: rgba(0, 229, 255, 0.05);
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.12), inset 0 0 12px rgba(0, 229, 255, 0.06);
+}
+@media (hover: hover) {
+  .secondary:hover {
+    background: rgba(0, 229, 255, 0.1);
+    box-shadow: var(--glow-cyan);
+  }
+}
+
+/* Ghost — transparent, quiet. */
+.ghost {
+  color: var(--text-dim);
+  background: transparent;
+}
+@media (hover: hover) {
+  .ghost:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* Danger — red glow. */
+.danger {
+  color: #1a0308;
+  background: linear-gradient(180deg, #ff85a0, var(--error));
+  box-shadow: var(--glow-error);
+  font-weight: 700;
+}
+
+.spin {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: sp-spin 0.7s linear infinite;
+}

@@ -1,0 +1,111 @@
+/* Chip */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-dim);
+  background: var(--glass-strong);
+  border: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+.chipCyan {
+  color: var(--cyan);
+  border-color: rgba(0, 229, 255, 0.4);
+  background: rgba(0, 229, 255, 0.08);
+}
+.chipPink {
+  color: #ff8ac2;
+  border-color: rgba(255, 46, 151, 0.4);
+  background: rgba(255, 46, 151, 0.08);
+}
+.chipSuccess {
+  color: var(--success);
+  border-color: rgba(45, 255, 154, 0.4);
+  background: rgba(45, 255, 154, 0.08);
+}
+
+/* Status badge (dot + text) */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  animation: sp-pulse 2s var(--ease-in-out) infinite;
+}
+
+/* Linear progress */
+.track {
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+/* Member mini bar: signed magnitude around a center baseline */
+.miniTrack {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.miniFill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width var(--dur-slow) var(--ease-out);
+}
+.owed {
+  background: linear-gradient(90deg, rgba(45, 255, 154, 0.4), var(--success));
+  box-shadow: var(--glow-success);
+}
+.owe {
+  background: linear-gradient(90deg, rgba(255, 46, 151, 0.4), var(--pink));
+  box-shadow: var(--glow-pink);
+}
+
+/* Radial gauge */
+.gauge {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.gauge svg {
+  transform: rotate(-90deg);
+}
+.gaugeTrack {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+}
+.gaugeArc {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--dur-slow) var(--ease-out);
+}
+.gaugeLabel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
