@@ -1,0 +1,16 @@
+.git
+.agents
+.codex
+.claude
+.cursor
+.gemini
+.codegraph
+node_modules
+dist
+build
+apps/web/dist
+.env
+.env.local
+*.log
+.DS_Store
+reference.png

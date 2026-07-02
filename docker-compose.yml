@@ -1,4 +1,25 @@
 services:
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://splitpay:splitpay@postgres:5432/splitpay?schema=public
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -20,6 +41,8 @@ services:
   adminer:
     image: adminer:latest
     restart: unless-stopped
+    profiles:
+      - tools
     ports:
       - "8080:8080"
     depends_on:
