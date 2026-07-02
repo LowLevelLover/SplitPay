@@ -80,6 +80,10 @@ async function findOpen(groupId: string): Promise<FullSettlement | null> {
   return (s as FullSettlement) ?? null;
 }
 
+function transferKey(t: { fromUserId: string; toUserId: string; amountCents: number }): string {
+  return `${t.fromUserId}:${t.toUserId}:${t.amountCents}`;
+}
+
 export async function getActiveSettlement(groupId: string): Promise<SettlementDTO | null> {
   const s = await findOpen(groupId);
   return s ? await toSettlementDTO(s) : null;
@@ -126,6 +130,12 @@ export async function agreeSettlement(
 
   const involved = new Set(s.transfers.flatMap((t) => [t.fromUserId, t.toUserId]));
   if (!involved.has(userId)) throw new AppError("You are not part of this settlement", 403);
+  if (escrowProvider.kind !== "sim") {
+    const user = s.transfers
+      .flatMap((t) => [t.from, t.to])
+      .find((u) => u.id === userId);
+    if (!user?.tonAddress) throw new AppError("Connect your TON wallet before agreeing", 400);
+  }
 
   await db
     .insert(schema.settlementAgreements)
@@ -232,6 +242,55 @@ export async function markReleased(settlementId: string): Promise<void> {
   });
 }
 
+/**
+ * A confirmed off-app payment changes the ledger immediately. Keep any open
+ * escrow aligned with that current ledger without writing extra settlement
+ * expenses, otherwise manual payments would be counted twice.
+ */
+export async function syncActiveSettlementWithBalances(groupId: string): Promise<void> {
+  const s = await findOpen(groupId);
+  if (!s) return;
+
+  const transfers = minimizeTransactions(await computeBalances(groupId));
+
+  await db.transaction(async (tx) => {
+    if (transfers.length === 0) {
+      await tx
+        .update(schema.settlements)
+        .set({ status: "released" })
+        .where(eq(schema.settlements.id, s.id));
+      return;
+    }
+
+    const paidByKey = new Map<string, SettlementTransfer[]>();
+    for (const t of s.transfers) {
+      if (!t.paid) continue;
+      const key = transferKey(t);
+      paidByKey.set(key, [...(paidByKey.get(key) ?? []), t]);
+    }
+
+    await tx.delete(schema.settlementTransfers).where(eq(schema.settlementTransfers.settlementId, s.id));
+    await tx.insert(schema.settlementTransfers).values(
+      transfers.map((t) => {
+        const key = `${t.from.id}:${t.to.id}:${t.amountCents}`;
+        const paid = paidByKey.get(key)?.shift();
+        return {
+          settlementId: s.id,
+          fromUserId: t.from.id,
+          toUserId: t.to.id,
+          amountCents: t.amountCents,
+          paid: !!paid,
+          txHash: paid?.txHash ?? null,
+        };
+      }),
+    );
+
+    if (s.status === "proposed") {
+      await tx.delete(schema.settlementAgreements).where(eq(schema.settlementAgreements.settlementId, s.id));
+    }
+  });
+}
+
 export async function getSettlement(settlementId: string): Promise<SettlementDTO> {
   return await toSettlementDTO(await load(settlementId));
 }
@@ -255,6 +314,10 @@ export async function confirmCallerDeposit(
   settlementId: string,
   userId: string,
 ): Promise<SettlementDTO> {
+  if (escrowProvider.kind !== "sim") {
+    throw new AppError("On-chain deposits are confirmed by the TON watcher", 409);
+  }
+
   const s = await load(settlementId);
   if (s.status !== "deployed") throw new AppError("Settlement is not ready for deposits");
   const t = s.transfers.find((t) => t.fromUserId === userId);

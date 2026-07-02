@@ -6,6 +6,7 @@ import { getGroupDTO } from "./groups.js";
 import { listManualSettlements } from "./manualSettlements.js";
 import { minimizeTransactions } from "./settlement.js";
 import { getActiveSettlement } from "./settlements.js";
+import { convert } from "./prices.js";
 import { toUserDTO } from "./users.js";
 
 /**
@@ -24,11 +25,13 @@ export async function computeBalances(groupId: string): Promise<BalanceDTO[]> {
 
   const net = new Map<string, number>();
   const add = (id: string, delta: number) => net.set(id, (net.get(id) ?? 0) + delta);
+  const toGroupCents = async (amountCents: number, currency: string) =>
+    Math.round((await convert(amountCents / 100, currency, group.currency)) * 100);
 
   for (const m of group.members) add(m.userId, 0);
   for (const e of group.expenses) {
-    add(e.payerId, e.amountCents);
-    for (const s of e.shares) add(s.userId, -s.amountCents);
+    add(e.payerId, await toGroupCents(e.amountCents, e.currency));
+    for (const s of e.shares) add(s.userId, -(await toGroupCents(s.amountCents, e.currency)));
   }
 
   const usersById = new Map(group.members.map((m) => [m.userId, m.user]));

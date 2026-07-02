@@ -3,7 +3,7 @@ import { webhookCallback } from "grammy";
 import type { Bot } from "grammy";
 import { ZodError } from "zod";
 import type { SplitPayContext } from "./bot/context.js";
-import { env, isProd } from "./config/env.js";
+import { env, isProd, publicUrl } from "./config/env.js";
 import { AppError } from "./lib/errors.js";
 import { registerApiRoutes } from "./api/routes/index.js";
 import { registerAdminRoutes } from "./api/routes/admin.js";
@@ -28,6 +28,13 @@ export async function buildApp(bot: Bot<SplitPayContext>) {
   });
 
   app.get("/health", async () => ({ ok: true }));
+  app.get("/api/tonconnect-manifest.json", async (_req, reply) =>
+    reply.type("application/json").send({
+      url: publicUrl,
+      name: "SplitPay",
+      iconUrl: "https://ton.org/download/ton_symbol.png",
+    }),
+  );
 
   // Telegram webhook — only in webhook mode. Registering the callback marks the
   // bot as webhook-started, which would block bot.start() long polling.

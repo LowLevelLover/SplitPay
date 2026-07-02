@@ -98,6 +98,8 @@ export async function confirmManualSettlement(
       .set({ status: "confirmed", confirmedAt: new Date() })
       .where(eq(schema.manualSettlements.id, id));
   });
+  const { syncActiveSettlementWithBalances } = await import("./settlements.js");
+  await syncActiveSettlementWithBalances(m.groupId);
   return toDTO(await load(id));
 }
 

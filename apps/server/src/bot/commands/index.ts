@@ -5,6 +5,7 @@ import { formatCents } from "../../lib/money.js";
 import { getGroupSummary } from "../../services/balances.js";
 import { createSettlement } from "../../services/settlements.js";
 import { miniAppKeyboard } from "../keyboard.js";
+import { expenseExamples } from "../examples.js";
 
 const name = (u: { username: string | null; firstName: string }) =>
   u.username ? `@${u.username}` : u.firstName;
@@ -29,9 +30,8 @@ export function registerCommands(bot: Bot<SplitPayContext>): void {
     await ctx.reply(
       "*How to use SplitPay*\n\n" +
         "Record (mention me), any of:\n" +
-        `• \`@${env.BOT_USERNAME} @ali paid 60000 dinner @bob\` — equal split\n` +
-        `• \`@${env.BOT_USERNAME} @ali should pay @bob 50000\` — direct debt\n` +
-        `• ledger lines \`@ali -50000 kabab, +150000 paid\`\n\n` +
+        expenseExamples(env.BOT_USERNAME) +
+        "\n\n" +
         "• /balance — balances & who pays whom\n" +
         "• /settle — start an on-chain settlement (TON escrow)\n" +
         "• Open the Mini App for the full breakdown & payments.",

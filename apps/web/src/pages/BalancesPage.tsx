@@ -38,6 +38,7 @@ export function BalancesPage({ groupId, onSettle }: { groupId: string; onSettle:
   const me = balances.find((b) => b.user.telegramId === myTgId);
   const myNet = me?.netCents ?? 0;
   const maxAbs = Math.max(1, ...balances.map((b) => Math.abs(b.netCents)));
+  const telegramHandle = me?.user.username ? `@${me.user.username}` : null;
 
   const heroTone = myNet > 0 ? s.owed : myNet < 0 ? s.owe : s.flat;
   const heroLabel = !me
@@ -57,6 +58,12 @@ export function BalancesPage({ groupId, onSettle }: { groupId: string; onSettle:
         style={{ animationDelay: "40ms" }}
       >
         <div className={s.hero}>
+          {me && (
+            <div className={s.identity}>
+              <span>{displayName(me.user)}</span>
+              {telegramHandle && <span>{telegramHandle}</span>}
+            </div>
+          )}
           <span className={s.heroLabel}>{heroLabel}</span>
           <div className={`${s.heroValue} ${heroTone}`} aria-live="polite">
             {me && myNet !== 0 && (myNet > 0 ? "+" : "-")}

@@ -21,10 +21,11 @@ export interface DepositInstruction {
 // In the local admin panel (?devUser=…) it sends X-Dev-User instead.
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const devUser = getDevUser();
+  const hasBody = options.body !== undefined && options.body !== null;
   const res = await fetch(path, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
       ...(devUser ? { "X-Dev-User": devUser } : { "X-Init-Data": getInitData() }),
       ...options.headers,
     },

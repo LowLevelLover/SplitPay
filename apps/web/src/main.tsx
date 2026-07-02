@@ -16,7 +16,7 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
-const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
+const manifestUrl = `${window.location.origin}/api/tonconnect-manifest.json`;
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

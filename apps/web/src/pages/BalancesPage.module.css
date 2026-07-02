@@ -35,6 +35,34 @@
   text-shadow: 0 0 12px rgba(255, 46, 151, 0.55);
 }
 
+.identity {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  max-width: 100%;
+  color: var(--text);
+  font-size: var(--fs-sm);
+}
+
+.identity span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity span:first-child {
+  font-weight: 700;
+}
+
+.identity span:last-child {
+  color: var(--cyan);
+  text-shadow: var(--glow-text-cyan);
+}
+
 .heroValue {
   position: relative;
   z-index: 1;

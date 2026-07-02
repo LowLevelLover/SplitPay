@@ -10,6 +10,7 @@ import type { ParsedOp } from "../parser/expense.js";
 import { parseMessage } from "../parser/expense.js";
 import { handleSettleOps } from "./settle.js";
 import { miniAppKeyboard } from "../keyboard.js";
+import { expenseExamples } from "../examples.js";
 
 const name = (u: { username: string | null; firstName: string }) =>
   u.username ? `@${u.username}` : u.firstName;
@@ -33,14 +34,7 @@ export async function handleExpenseMention(ctx: SplitPayContext): Promise<void> 
 
   if (ops.length === 0) {
     await ctx.reply(
-      "I couldn't read that. Ways to split:\n" +
-        `• equally: \`@${env.BOT_USERNAME} @ali paid 60000 dinner @bob @carol\`\n` +
-        "• unequally: `@ali paid 60000 @bob=20000 @carol=40000`\n" +
-        "• by %: `@ali paid 60000 @bob=50% @carol=50%`\n" +
-        "• by shares: `@ali paid 60000 @bob*2 @carol*1`\n" +
-        "• by adjustment: `@ali paid 60000 @bob+5000 @carol`\n" +
-        "• who owes who: `@ali should pay @bob 50000`\n" +
-        "• a ledger: `@ali -50000 kabab, +150000 paid` / `@bob -100000 pizza`",
+      "I couldn't read that. Try one of these formats:\n\n" + expenseExamples(env.BOT_USERNAME),
       { parse_mode: "Markdown" },
     );
     return;

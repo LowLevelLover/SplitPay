@@ -290,7 +290,9 @@ export function SettlePage({ groupId }: { groupId: string }) {
           // user cancelled or sim address rejected — fall through to confirm
         }
       }
-      await confirmDeposit.mutateAsync(settlement.id);
+      if (!dep || dep.address.startsWith("EQsim_")) {
+        await confirmDeposit.mutateAsync(settlement.id);
+      }
     } finally {
       setBusy(false);
     }

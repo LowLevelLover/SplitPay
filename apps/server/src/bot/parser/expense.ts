@@ -100,7 +100,7 @@ function mentions(line: string): string[] {
 
 /** First bare number in a line → cents (unsigned). */
 function firstAmount(line: string): number | null {
-  const m = line.match(/-?\d+(?:\.\d{1,2})?/);
+  const m = line.replace(MENTION, " ").match(/-?\d+(?:\.\d{1,2})?/);
   return m ? parseAmountToCents(m[0].replace("-", "")) : null;
 }
 
@@ -109,7 +109,7 @@ function cleanDescription(text: string): string | null {
   const words = text
     .replace(MENTION, " ")
     .replace(/[+-]?\d+(?:\.\d{1,2})?/g, " ")
-    .replace(/تومان|تومن|ریال|usdt|tether|gram|should\s+pay|بدهکار|settled|repaid|paid\s+back|settle\s*up|تسویه|رد\s+کرد/gi, " ")
+    .replace(/تومان|تومن|ریال|usdt|tether|ton|gram|تون|should\s+pay|بدهکار|settled|repaid|paid\s+back|settle\s*up|تسویه|رد\s+کرد/gi, " ")
     .split(/[\s,]+/)
     .filter((w) => w && !NOISE.has(w.toLowerCase()));
   return words.length ? words.join(" ") : null;

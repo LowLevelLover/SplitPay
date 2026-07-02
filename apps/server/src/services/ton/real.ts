@@ -20,6 +20,7 @@ import {
 // this repo; enable by setting TON_MNEMONIC (see config/env.ts).
 
 const POLL_MS = 15_000;
+const GAS_RESERVE = toNano("0.1");
 
 export function createRealEscrowProvider(opts: {
   mnemonic: string[];
@@ -62,7 +63,7 @@ export function createRealEscrowProvider(opts: {
       secretKey: key.secretKey,
       seqno,
       sendMode: SendMode.PAY_GAS_SEPARATELY,
-      messages: [internal({ to: wallet.address, value: toNano("0.1"), bounce: false })],
+      messages: [internal({ to: wallet.address, value: GAS_RESERVE, bounce: false })],
     });
     return { address };
   }
@@ -84,12 +85,13 @@ export function createRealEscrowProvider(opts: {
       try {
         const { wallet } = await escrowWallet(plan.settlementId);
         const state = await client.getBalance(wallet.address);
+        const funded = state > GAS_RESERVE ? state - GAS_RESERVE : 0n;
         // Mark deposits paid as balance accrues (coarse: by cumulative funding).
         let covered = 0;
         for (const t of plan.transfers) {
           covered += t.amountCents;
           const need = BigInt(centsToBaseUnits(covered, plan.asset));
-          if (!paid.has(t.transferId) && state >= need) {
+          if (!paid.has(t.transferId) && funded >= need) {
             paid.add(t.transferId);
             hooks.onTransferPaid(t.transferId, null);
           }
