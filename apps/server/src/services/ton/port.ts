@@ -44,6 +44,8 @@ export interface EscrowProvider {
   ): DepositInstruction;
   /** Begin watching for funding; drives the release + settlement callbacks. */
   watch(address: string, plan: EscrowPlan, hooks: WatchHooks): void;
+  /** Live on-chain state of the escrow account. */
+  status(address: string, plan: EscrowPlan): Promise<{ deployed: boolean; balanceNano: string }>;
 }
 
 /** Minor units (cents ×100) → on-chain base units. */

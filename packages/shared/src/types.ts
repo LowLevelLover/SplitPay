@@ -10,7 +10,12 @@ export interface UserDTO {
   telegramId: string;
   username: string | null;
   firstName: string;
-  /** Connected TON wallet (set via the Mini App); null until connected. */
+  /** Saved TON settlement address (entered manually); null until provided. */
+  tonAddress: string | null;
+}
+
+/** The caller's saved settlement address. */
+export interface WalletDTO {
   tonAddress: string | null;
 }
 
@@ -105,6 +110,23 @@ export interface SettlementTransferDTO {
   amountCents: number;
   paid: boolean;
   txHash: string | null;
+}
+
+/** Live on-chain (or simulated) state of a settlement's escrow. */
+export interface EscrowStatusDTO {
+  settlementId: string;
+  /** Escrow account address; null until deployed. */
+  address: string | null;
+  network: "sim" | "testnet" | "mainnet";
+  deployed: boolean;
+  /** Current escrow balance, base units (nanoton). */
+  balanceNano: string;
+  /** Total deposits needed to cover every transfer, base units. */
+  requiredNano: string;
+  fundedTransferIds: string[];
+  released: boolean;
+  /** Block-explorer link for the escrow account; null in sim. */
+  explorerUrl: string | null;
 }
 
 export interface SettlementDTO {

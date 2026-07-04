@@ -1,15 +1,15 @@
 import type { SplitPayContext } from "../context.js";
 import { InputFile } from "grammy";
 import { env } from "../../config/env.js";
-import { formatCents } from "../../lib/money.js";
 import { AppError } from "../../lib/errors.js";
+import { fmtMoney } from "../format.js";
 import { applyParsedOps } from "../../services/expenses.js";
 import { getGroupSummary } from "../../services/balances.js";
 import { renderSummaryImage } from "../../lib/chart.js";
 import type { ParsedOp } from "../parser/expense.js";
 import { parseMessage } from "../parser/expense.js";
 import { handleSettleOps } from "./settle.js";
-import { miniAppKeyboard } from "../keyboard.js";
+import { miniAppKeyboard, webAppHint } from "../keyboard.js";
 import { expenseExamples } from "../examples.js";
 
 const name = (u: { username: string | null; firstName: string }) =>
@@ -34,7 +34,7 @@ export async function handleExpenseMention(ctx: SplitPayContext): Promise<void> 
 
   if (ops.length === 0) {
     await ctx.reply(
-      "I couldn't read that. Try one of these formats:\n\n" + expenseExamples(env.BOT_USERNAME),
+      "🤔 متوجه نشدم! یکی از این قالب‌ها را امتحان کنید:\n\n" + expenseExamples(env.BOT_USERNAME),
       { parse_mode: "Markdown" },
     );
     return;
@@ -60,14 +60,14 @@ export async function handleExpenseMention(ctx: SplitPayContext): Promise<void> 
     .map((e) => {
       if (e.kind === "debt") {
         const debtor = e.shares[0];
-        const who = debtor ? name(debtor.user) : "?";
-        return `• ${who} owes ${name(e.payer)} *${formatCents(e.amountCents, e.currency)} ${e.currency}*`;
+        const who = debtor ? name(debtor.user) : "؟";
+        return `• ${who} به ${name(e.payer)} بدهکار است: *${fmtMoney(e.amountCents, e.currency)}*`;
       }
       const what = e.description ? ` (${e.description})` : "";
       const shares = e.shares
-        .map((s) => `    ↳ ${name(s.user)} owes ${formatCents(s.amountCents, e.currency)} ${e.currency}`)
+        .map((s) => `    ↳ سهم ${name(s.user)}: ${fmtMoney(s.amountCents, e.currency)}`)
         .join("\n");
-      return `• ${name(e.payer)} paid *${formatCents(e.amountCents, e.currency)} ${e.currency}*${what}\n${shares}`;
+      return `• ${name(e.payer)} پرداخت کرد: *${fmtMoney(e.amountCents, e.currency)}*${what}\n${shares}`;
     })
     .join("\n");
 
@@ -76,22 +76,22 @@ export async function handleExpenseMention(ctx: SplitPayContext): Promise<void> 
     .sort((a, b) => b.netCents - a.netCents)
     .map((b) =>
       b.netCents > 0
-        ? `• ${name(b.user)} is owed *${formatCents(b.netCents, cur)} ${cur}*`
-        : `• ${name(b.user)} owes *${formatCents(b.netCents, cur)} ${cur}*`,
+        ? `• ${name(b.user)} طلبکار است: *${fmtMoney(b.netCents, cur)}*`
+        : `• ${name(b.user)} بدهکار است: *${fmtMoney(b.netCents, cur)}*`,
     )
     .join("\n");
 
   const owed =
     summary.suggestions.length === 0
-      ? "🎉 All settled up!"
+      ? "🎉 همه‌چیز تسویه است!"
       : summary.suggestions
-          .map((s) => `• ${name(s.from)} → ${name(s.to)}: *${formatCents(s.amountCents, cur)} ${cur}*`)
+          .map((s) => `• ${name(s.from)} باید به ${name(s.to)} بپردازد: *${fmtMoney(s.amountCents, cur)}*`)
           .join("\n");
 
   const report =
-    `✅ *Recorded*\n${recorded}\n\n` +
-    (balanceLines ? `📊 *Net balances*\n${balanceLines}\n\n` : "") +
-    `🧮 *Who pays whom*\n${owed}`;
+    `✅ *ثبت شد*\n${recorded}\n\n` +
+    (balanceLines ? `📊 *مانده خالص*\n${balanceLines}\n\n` : "") +
+    `🧮 *چه کسی به چه کسی بپردازد*\n${owed}\n\n${webAppHint(ctx.dbGroupId)}`;
 
   const kb = miniAppKeyboard(ctx.dbGroupId);
   try {

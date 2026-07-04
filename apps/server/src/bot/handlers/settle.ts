@@ -1,7 +1,7 @@
 import type { SplitPayContext } from "../context.js";
 import type { ParsedOp } from "../parser/expense.js";
 import { AppError } from "../../lib/errors.js";
-import { formatCents } from "../../lib/money.js";
+import { fmtMoney } from "../format.js";
 import { createManualSettlement } from "../../services/manualSettlements.js";
 import { getOrCreateUserByUsername } from "../../services/users.js";
 import { sendManualSettlementRequest } from "../notify.js";
@@ -33,12 +33,12 @@ export async function handleSettleOps(ctx: SplitPayContext, ops: SettleOp[]): Pr
       });
       await sendManualSettlementRequest(ctx.api, dto, chatId);
       lines.push(
-        `• Asked ${nm(dto.to)} to confirm *${formatCents(dto.amountCents, dto.currency)} ${dto.currency}* from ${nm(dto.from)}`,
+        `• از ${nm(dto.to)} خواستم دریافت *${fmtMoney(dto.amountCents, dto.currency)}* از طرف ${nm(dto.from)} را تأیید کند`,
       );
     } catch (err) {
-      lines.push(`⚠️ ${err instanceof AppError ? err.message : "couldn't record that settle-up"}`);
+      lines.push(`⚠️ ثبت نشد${err instanceof AppError ? `: ${err.message}` : "."}`);
     }
   }
 
-  await ctx.reply(`💸 *Settle-up requested*\n${lines.join("\n")}`, { parse_mode: "Markdown" });
+  await ctx.reply(`💸 *درخواست تسویه ثبت شد*\n${lines.join("\n")}`, { parse_mode: "Markdown" });
 }

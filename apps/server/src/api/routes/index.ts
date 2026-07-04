@@ -11,12 +11,13 @@ import { authenticate } from "../auth/authenticate.js";
 import { assertMembership, getGroupChatId, getGroupDTO } from "../../services/groups.js";
 import { getGroupSummary } from "../../services/balances.js";
 import { createExpense, listExpenses } from "../../services/expenses.js";
-import { saveTonAddress } from "../../services/users.js";
+import { getUserById, saveTonAddress, toUserDTO } from "../../services/users.js";
 import {
   agreeSettlement,
   confirmCallerDeposit,
   createSettlement,
   getDepositInstruction,
+  getEscrowStatus,
   getSettlement,
 } from "../../services/settlements.js";
 import {
@@ -32,6 +33,19 @@ export async function registerApiRoutes(
   app: FastifyInstance,
   bot: Bot<SplitPayContext>,
 ): Promise<void> {
+  // The authenticated caller's profile.
+  app.get("/api/me", async (req) => {
+    const { userId } = await authenticate(req);
+    return toUserDTO(await getUserById(userId));
+  });
+
+  // The caller's saved settlement address.
+  app.get("/api/wallet", async (req) => {
+    const { userId } = await authenticate(req);
+    const user = await getUserById(userId);
+    return { tonAddress: user.tonAddress ?? null };
+  });
+
   // Group profile + members.
   app.get<{ Params: { groupId: string } }>("/api/groups/:groupId", async (req) => {
     const { userId } = await authenticate(req);
@@ -61,7 +75,7 @@ export async function registerApiRoutes(
     return createExpense(input);
   });
 
-  // Save the caller's connected TON wallet.
+  // Save the caller's settlement address (manually entered).
   app.post("/api/wallet", async (req) => {
     const { userId } = await authenticate(req);
     const { tonAddress } = saveWalletSchema.parse(req.body);
@@ -69,12 +83,21 @@ export async function registerApiRoutes(
     return { ok: true };
   });
 
-  // Open a settlement for the group's current balances.
+  // Open a settlement: whole group, or scoped (caller pays selected members).
   app.post("/api/settlements", async (req) => {
     const { userId } = await authenticate(req);
     const input = createSettlementSchema.parse(req.body);
     await assertMembership(input.groupId, userId);
-    return createSettlement(input.groupId, input.asset);
+    return createSettlement(input.groupId, input.asset, {
+      payerId: userId,
+      toUserIds: input.toUserIds,
+    });
+  });
+
+  // Live escrow state (deployment, funding progress, explorer link).
+  app.get<{ Params: { id: string } }>("/api/settlements/:id/escrow-status", async (req) => {
+    await authenticate(req);
+    return getEscrowStatus(req.params.id);
   });
 
   // Poll a settlement's state.

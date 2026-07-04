@@ -54,10 +54,15 @@ export const saveWalletSchema = z.object({
 
 export type SaveWalletInput = z.infer<typeof saveWalletSchema>;
 
-/** Open a settlement for a group's current balances. */
+/**
+ * Open a settlement. Without `toUserIds` it snapshots the group's minimized
+ * debt graph. With `toUserIds` the caller is the single payer and each listed
+ * user a receiver: one escrow, caller pays everyone they owe in that list.
+ */
 export const createSettlementSchema = z.object({
   groupId: z.string().min(1),
   asset: z.enum(["TON", "USDT"]).default("TON"),
+  toUserIds: z.array(z.string().min(1)).min(1).max(32).optional(),
 });
 
 export type CreateSettlementInput = z.infer<typeof createSettlementSchema>;

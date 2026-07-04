@@ -15,8 +15,6 @@
     "@fontsource-variable/space-grotesk": "^5.2.10",
     "@split-pay/shared": "workspace:*",
     "@tanstack/react-query": "^5.59.16",
-    "@telegram-apps/telegram-ui": "^2.1.8",
-    "@tonconnect/ui-react": "^2.0.9",
     "lucide-react": "^1.23.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

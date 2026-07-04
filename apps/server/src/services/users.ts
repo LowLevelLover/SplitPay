@@ -1,7 +1,10 @@
 import type { UserDTO } from "@split-pay/shared";
+import { Address } from "@ton/core";
 import { eq, sql } from "drizzle-orm";
+import { env } from "../config/env.js";
 import { db, schema } from "../db/client.js";
 import type { User } from "../db/schema.js";
+import { AppError } from "../lib/errors.js";
 
 export function toUserDTO(user: User): UserDTO {
   return {
@@ -80,8 +83,25 @@ export async function getOrCreateUserByUsername(username: string): Promise<User>
   return created!;
 }
 
+/** Validate (raw or friendly form) and store normalized non-bounceable address. */
 export async function saveTonAddress(userId: string, tonAddress: string): Promise<void> {
-  await db.update(schema.users).set({ tonAddress }).where(eq(schema.users.id, userId));
+  let parsed: Address;
+  try {
+    parsed = Address.parse(tonAddress.trim());
+  } catch {
+    throw new AppError("Invalid TON address — paste it in raw or friendly form", 400);
+  }
+  const normalized = parsed.toString({
+    bounceable: false,
+    testOnly: env.TON_NETWORK !== "mainnet",
+  });
+  await db.update(schema.users).set({ tonAddress: normalized }).where(eq(schema.users.id, userId));
+}
+
+export async function getUserById(userId: string): Promise<User> {
+  const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
+  if (!user) throw new AppError("User not found", 404);
+  return user;
 }
 
 /** Look up an existing user by their Telegram id (used by the dev-auth bypass). */

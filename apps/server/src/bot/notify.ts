@@ -1,7 +1,7 @@
 import type { Api } from "grammy";
 import { InlineKeyboard } from "grammy";
 import type { ManualSettlementDTO } from "@split-pay/shared";
-import { formatCents } from "../lib/money.js";
+import { fmtMoney } from "./format.js";
 
 const nm = (u: { username: string | null; firstName: string }) =>
   u.username ? `@${u.username}` : u.firstName;
@@ -15,18 +15,18 @@ export async function sendManualSettlementRequest(
   dto: ManualSettlementDTO,
   groupChatId: string,
 ): Promise<void> {
-  const amount = `${formatCents(dto.amountCents, dto.currency)} ${dto.currency}`;
+  const amount = fmtMoney(dto.amountCents, dto.currency);
   const note = dto.note ? ` (${dto.note})` : "";
   const kb = new InlineKeyboard()
-    .text("✅ Confirm", `msettle:confirm:${dto.id}`)
-    .text("❌ Reject", `msettle:reject:${dto.id}`);
+    .text("✅ تأیید", `msettle:confirm:${dto.id}`)
+    .text("❌ رد", `msettle:reject:${dto.id}`);
 
   const dm =
-    `💸 *Settle-up request*\n\n${nm(dto.from)} says they paid you *${amount}*${note}.\n\n` +
-    "Confirm if you received it — I'll clear the debt between you.";
+    `💸 *درخواست تسویه*\n\n${nm(dto.from)} می‌گوید *${amount}* به شما پرداخت کرده است${note}.\n\n` +
+    "اگر دریافت کرده‌اید تأیید کنید — بدهی بین شما را صاف می‌کنم.";
   const group =
-    `💸 *Settle-up request*\n\n${nm(dto.from)} says they paid ${nm(dto.to)} *${amount}*${note}.\n` +
-    `${nm(dto.to)}, please confirm below.`;
+    `💸 *درخواست تسویه*\n\n${nm(dto.from)} می‌گوید *${amount}* به ${nm(dto.to)} پرداخت کرده است${note}.\n` +
+    `${nm(dto.to)}، لطفاً در پایین تأیید یا رد کنید.`;
 
   const recipient = dto.to.telegramId;
   try {

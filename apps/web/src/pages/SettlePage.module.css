@@ -180,11 +180,6 @@
   font-size: var(--fs-sm);
   padding: var(--s-2);
 }
-.tonWrap {
-  display: flex;
-  justify-content: center;
-  padding: var(--s-2) 0;
-}
 .celebrate {
   text-align: center;
   font-family: var(--font-display);
@@ -194,4 +189,152 @@
   text-shadow: var(--glow-success);
   padding: var(--s-3);
   animation: sp-pop var(--dur-slow) var(--ease-out);
+}
+
+/* Wallet card */
+.walletSaved {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.walletIcon {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--cyan);
+  background: rgba(0, 224, 255, 0.1);
+}
+.walletMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.walletLabel {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.walletEdit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.monoInput {
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: var(--fs-sm);
+}
+.walletError {
+  color: var(--error);
+  font-size: var(--fs-sm);
+}
+.walletActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+
+/* Pick receivers */
+.pickHint {
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  margin: 0 0 var(--s-2);
+  padding-inline: var(--s-1);
+}
+
+/* Deposit / copyable fields */
+.copyRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.copyRow + .copyRow {
+  border-top: 1px solid var(--hairline);
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+}
+.copyField {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.copyLabel {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.copyValue {
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  word-break: break-all;
+}
+.copyBtn {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--cyan);
+  background: rgba(0, 224, 255, 0.08);
+  border: 1px solid var(--hairline);
+  transition: all var(--dur-base) var(--ease-out);
+}
+.copyBtn:hover {
+  background: rgba(0, 224, 255, 0.16);
+}
+.depositActions {
+  margin-top: var(--s-4);
+}
+.payLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  width: 100%;
+  padding: var(--s-3);
+  border-radius: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: #06170f;
+  background: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+/* Escrow status */
+.escrowHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.explorer {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-sm);
+  color: var(--cyan);
+  text-decoration: none;
+}
+.explorer:hover {
+  text-decoration: underline;
+}
+.fundingLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
 }

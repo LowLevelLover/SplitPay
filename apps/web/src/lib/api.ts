@@ -2,12 +2,15 @@ import type {
   CreateExpenseInput,
   CreateManualSettlementInput,
   CreateSettlementInput,
+  EscrowStatusDTO,
   ExpenseDTO,
   GroupSummaryDTO,
   ManualSettlementDTO,
   SettlementDTO,
+  UserDTO,
+  WalletDTO,
 } from "@split-pay/shared";
-import { getDevUser, getInitData } from "./telegram.js";
+import { getSession } from "./session.js";
 
 /** Deposit instruction for a debtor (from GET /settlements/:id/deposit). */
 export interface DepositInstruction {
@@ -17,16 +20,27 @@ export interface DepositInstruction {
   asset: "TON" | "USDT";
 }
 
-// Fetch wrapper: every request carries initData in X-Init-Data for auth.
-// In the local admin panel (?devUser=…) it sends X-Dev-User instead.
+/** Login-screen listing from GET /api/admin/groups (not part of the shared DTOs). */
+export interface AdminGroupDTO {
+  id: string;
+  title: string | null;
+  members: {
+    telegramId: string;
+    username: string | null;
+    firstName: string;
+    tonAddress: string | null;
+  }[];
+}
+
+// Fetch wrapper: every request identifies the caller via X-Dev-User (local dev auth).
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const devUser = getDevUser();
+  const session = getSession();
   const hasBody = options.body !== undefined && options.body !== null;
   const res = await fetch(path, {
     ...options,
     headers: {
       ...(hasBody ? { "Content-Type": "application/json" } : {}),
-      ...(devUser ? { "X-Dev-User": devUser } : { "X-Init-Data": getInitData() }),
+      ...(session ? { "X-Dev-User": session.telegramId } : {}),
       ...options.headers,
     },
   });
@@ -39,6 +53,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  getAdminGroups: () => request<AdminGroupDTO[]>(`/api/admin/groups`),
+
+  getMe: () => request<UserDTO>(`/api/me`),
+
   getGroupSummary: (groupId: string) => request<GroupSummaryDTO>(`/api/groups/${groupId}/summary`),
 
   getExpenses: (groupId: string) => request<ExpenseDTO[]>(`/api/groups/${groupId}/expenses`),
@@ -46,8 +64,10 @@ export const api = {
   createExpense: (input: CreateExpenseInput) =>
     request<ExpenseDTO>(`/api/expenses`, { method: "POST", body: JSON.stringify(input) }),
 
+  getWallet: () => request<WalletDTO>(`/api/wallet`),
+
   saveWallet: (tonAddress: string) =>
-    request<{ ok: boolean }>(`/api/wallet`, {
+    request<WalletDTO>(`/api/wallet`, {
       method: "POST",
       body: JSON.stringify({ tonAddress }),
     }),
@@ -59,6 +79,9 @@ export const api = {
 
   agreeSettlement: (id: string) =>
     request<SettlementDTO>(`/api/settlements/${id}/agree`, { method: "POST" }),
+
+  getEscrowStatus: (id: string) =>
+    request<EscrowStatusDTO>(`/api/settlements/${id}/escrow-status`),
 
   getDeposit: (id: string) => request<DepositInstruction | null>(`/api/settlements/${id}/deposit`),
 

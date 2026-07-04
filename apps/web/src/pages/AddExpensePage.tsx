@@ -16,18 +16,20 @@ import {
 } from "../ui/index.js";
 import { useCreateExpense, useGroupSummary } from "../hooks/useGroup.js";
 import { displayName } from "../lib/format.js";
-import { getCurrentTelegramId } from "../lib/telegram.js";
+import { getSession } from "../lib/session.js";
+import { useI18n } from "../i18n/index.js";
 import s from "./AddExpensePage.module.css";
 
 type Strategy = "equal" | "percent" | "exact";
 const toCents = (v: string) => Math.round((parseFloat(v) || 0) * 100);
 
 export function AddExpensePage({ groupId, onDone }: { groupId: string; onDone: () => void }) {
+  const { t } = useI18n();
   const { data, isLoading } = useGroupSummary(groupId);
   const createExpense = useCreateExpense(groupId);
 
   const members: UserDTO[] = data?.group.members ?? [];
-  const myTgId = getCurrentTelegramId();
+  const myTgId = getSession()?.telegramId ?? null;
   const defaultPayer = useMemo(
     () => members.find((m) => m.telegramId === myTgId)?.id ?? members[0]?.id ?? "",
     [members, myTgId],
@@ -42,7 +44,12 @@ export function AddExpensePage({ groupId, onDone }: { groupId: string; onDone: (
   const [values, setValues] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
 
-  if (isLoading) return <Screen eyebrow="SplitPay" title="Add expense"><Spinner /></Screen>;
+  if (isLoading)
+    return (
+      <Screen eyebrow={t("app.name")} title={t("add.title")}>
+        <Spinner />
+      </Screen>
+    );
   if (!data) return null;
 
   const payer = payerId || defaultPayer;
@@ -52,20 +59,20 @@ export function AddExpensePage({ groupId, onDone }: { groupId: string; onDone: (
   async function submit() {
     setErr(null);
     const amountCents = toCents(amount);
-    if (amountCents <= 0) return setErr("Enter an amount greater than zero.");
-    if (selectedIds.length === 0) return setErr("Pick at least one participant.");
+    if (amountCents <= 0) return setErr(t("add.errAmount"));
+    if (selectedIds.length === 0) return setErr(t("add.errParticipants"));
 
     let split: CreateExpenseInput["split"];
     if (strategy === "equal") {
       split = { strategy: "equal", participantIds: selectedIds };
     } else if (strategy === "percent") {
       const shares = selectedIds.map((userId) => ({ userId, percent: parseFloat(values[userId] ?? "") || 0 }));
-      if (shares.some((sh) => sh.percent <= 0)) return setErr("Enter a percent for each participant.");
+      if (shares.some((sh) => sh.percent <= 0)) return setErr(t("add.errPercent"));
       split = { strategy: "percent", shares };
     } else {
       const shares = selectedIds.map((userId) => ({ userId, amountCents: toCents(values[userId] ?? "") }));
       const sum = shares.reduce((a, sh) => a + sh.amountCents, 0);
-      if (sum !== amountCents) return setErr(`Exact shares must add up to ${amount}.`);
+      if (sum !== amountCents) return setErr(t("add.errExact", { amount }));
       split = { strategy: "exact", shares };
     }
 
@@ -80,22 +87,22 @@ export function AddExpensePage({ groupId, onDone }: { groupId: string; onDone: (
       });
       onDone();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed to add expense.");
+      setErr(e instanceof Error ? e.message : t("add.errFailed"));
     }
   }
 
   return (
-    <Screen eyebrow="SplitPay" title="Add expense">
+    <Screen eyebrow={t("app.name")} title={t("add.title")}>
       <Card>
         <div className={s.form}>
           <Input
-            label="Description"
-            placeholder="Dinner at Shandiz"
+            label={t("add.description")}
+            placeholder={t("add.descriptionPh")}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
           <Input
-            label="Amount"
+            label={t("add.amount")}
             big
             type="number"
             inputMode="decimal"
@@ -104,12 +111,12 @@ export function AddExpensePage({ groupId, onDone }: { groupId: string; onDone: (
             onChange={(e) => setAmount(e.target.value)}
           />
           <div className={s.grid2}>
-            <Select label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            <Select label={t("add.currency")} value={currency} onChange={(e) => setCurrency(e.target.value)}>
               <option value="IRT">IRT · تومان</option>
               <option value="USDT">USDT</option>
               <option value="TON">TON</option>
             </Select>
-            <Select label="Paid by" value={payer} onChange={(e) => setPayerId(e.target.value)}>
+            <Select label={t("add.paidBy")} value={payer} onChange={(e) => setPayerId(e.target.value)}>
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
                   {displayName(m)}
@@ -120,21 +127,21 @@ export function AddExpensePage({ groupId, onDone }: { groupId: string; onDone: (
         </div>
       </Card>
 
-      <Section label="Split">
+      <Section label={t("add.split")}>
         <SegmentedControl<Strategy>
           value={strategy}
           onChange={setStrategy}
           options={[
-            { value: "equal", label: "Equally" },
-            { value: "percent", label: "By %" },
-            { value: "exact", label: "Exact" },
+            { value: "equal", label: t("add.equally") },
+            { value: "percent", label: t("add.byPercent") },
+            { value: "exact", label: t("add.exact") },
           ]}
         />
       </Section>
 
       <Section
-        label="Participants"
-        footer={strategy !== "equal" ? "Enter a value for each included person." : undefined}
+        label={t("add.participants")}
+        footer={strategy !== "equal" ? t("add.participantsFooter") : undefined}
       >
         <Card pad="sm">
           {members.map((m) => (
@@ -142,7 +149,7 @@ export function AddExpensePage({ groupId, onDone }: { groupId: string; onDone: (
               key={m.id}
               before={
                 <Checkbox
-                  aria-label={`Include ${displayName(m)}`}
+                  aria-label={t("add.include", { name: displayName(m) })}
                   checked={isIncluded(m.id)}
                   onChange={(checked) => setIncluded((st) => ({ ...st, [m.id]: checked }))}
                 />
@@ -153,7 +160,7 @@ export function AddExpensePage({ groupId, onDone }: { groupId: string; onDone: (
                   <MiniInput
                     type="number"
                     inputMode="decimal"
-                    placeholder={strategy === "percent" ? "%" : "amount"}
+                    placeholder={strategy === "percent" ? "%" : t("add.amountPh")}
                     value={values[m.id] ?? ""}
                     onChange={(e) => setValues((st) => ({ ...st, [m.id]: e.target.value }))}
                   />
@@ -173,7 +180,7 @@ export function AddExpensePage({ groupId, onDone }: { groupId: string; onDone: (
 
       <div className={s.submit}>
         <Button stretched loading={createExpense.isPending} onClick={submit}>
-          Add expense
+          {t("add.submit")}
         </Button>
       </div>
     </Screen>

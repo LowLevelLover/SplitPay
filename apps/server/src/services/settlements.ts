@@ -1,12 +1,23 @@
-import type { SettlementAsset, SettlementDTO, SettlementStatus } from "@split-pay/shared";
+import type {
+  EscrowStatusDTO,
+  SettlementAsset,
+  SettlementDTO,
+  SettlementStatus,
+} from "@split-pay/shared";
 import { and, eq, inArray, notInArray } from "drizzle-orm";
+import { env } from "../config/env.js";
 import { db, schema } from "../db/client.js";
 import { AppError } from "../lib/errors.js";
 import { computeBalances } from "./balances.js";
 import { minimizeTransactions } from "./settlement.js";
 import { convert } from "./prices.js";
 import { toUserDTO } from "./users.js";
-import { escrowProvider, type DepositInstruction, type EscrowPlan } from "./ton/index.js";
+import {
+  centsToBaseUnits,
+  escrowProvider,
+  type DepositInstruction,
+  type EscrowPlan,
+} from "./ton/index.js";
 import type { Settlement, SettlementTransfer, User } from "../db/schema.js";
 
 type FullSettlement = Settlement & {
@@ -89,31 +100,89 @@ export async function getActiveSettlement(groupId: string): Promise<SettlementDT
   return s ? await toSettlementDTO(s) : null;
 }
 
-/** Snapshot the current minimized debt graph into a new settlement. */
+/**
+ * Pairwise net debt payer→each receiver, straight from expenses/shares (other
+ * members excluded). Positive = payer owes that receiver; in group currency.
+ */
+async function pairwiseNets(
+  groupId: string,
+  payerId: string,
+  toUserIds: string[],
+): Promise<{ toUserId: string; amountCents: number }[]> {
+  const group = await db.query.groups.findFirst({
+    where: eq(schema.groups.id, groupId),
+    with: { members: true, expenses: { with: { shares: true } } },
+  });
+  if (!group) throw new AppError("Group not found", 404);
+
+  const memberIds = new Set(group.members.map((m) => m.userId));
+  for (const id of toUserIds) {
+    if (!memberIds.has(id)) throw new AppError("Receiver is not a group member", 400);
+  }
+  const receivers = new Set(toUserIds.filter((id) => id !== payerId));
+
+  const toGroupCents = async (amountCents: number, currency: string) =>
+    Math.round((await convert(amountCents / 100, currency, group.currency)) * 100);
+
+  const net = new Map<string, number>(); // receiverId → cents payer owes them
+  const add = (receiverId: string, delta: number) =>
+    net.set(receiverId, (net.get(receiverId) ?? 0) + delta);
+
+  for (const e of group.expenses) {
+    for (const s of e.shares) {
+      if (s.userId === e.payerId) continue; // own share = no debt
+      // A share held by U on an expense paid by P means U owes P that amount.
+      if (s.userId === payerId && receivers.has(e.payerId)) {
+        add(e.payerId, await toGroupCents(s.amountCents, e.currency));
+      } else if (e.payerId === payerId && receivers.has(s.userId)) {
+        add(s.userId, -(await toGroupCents(s.amountCents, e.currency)));
+      }
+    }
+  }
+
+  return [...net.entries()]
+    .filter(([, cents]) => cents > 0)
+    .map(([toUserId, amountCents]) => ({ toUserId, amountCents }));
+}
+
+/**
+ * Snapshot debts into a new settlement. Without opts: the group's minimized
+ * graph. With `toUserIds`: scoped — `payerId` pays each listed receiver their
+ * pairwise net debt (one escrow, one payer → N receivers).
+ */
 export async function createSettlement(
   groupId: string,
   asset: SettlementAsset,
+  opts?: { payerId?: string; toUserIds?: string[] },
 ): Promise<SettlementDTO> {
   const existing = await findOpen(groupId);
   if (existing) return await toSettlementDTO(existing); // one open settlement at a time
 
-  const balances = await computeBalances(groupId);
-  const transfers = minimizeTransactions(balances);
-  if (transfers.length === 0) throw new AppError("Nothing to settle — all balances are zero");
+  let rows: { fromUserId: string; toUserId: string; amountCents: number }[];
+  if (opts?.toUserIds?.length) {
+    if (!opts.payerId) throw new AppError("A scoped settlement needs a payer");
+    const payerId = opts.payerId;
+    const nets = await pairwiseNets(groupId, payerId, opts.toUserIds);
+    if (nets.length === 0) throw new AppError("nothing to settle with the selected members");
+    rows = nets.map((n) => ({ fromUserId: payerId, toUserId: n.toUserId, amountCents: n.amountCents }));
+  } else {
+    const transfers = minimizeTransactions(await computeBalances(groupId));
+    if (transfers.length === 0) throw new AppError("Nothing to settle — all balances are zero");
+    rows = transfers.map((t) => ({
+      fromUserId: t.from.id,
+      toUserId: t.to.id,
+      amountCents: t.amountCents,
+    }));
+  }
 
   const settlementId = await db.transaction(async (tx) => {
     const [s] = await tx
       .insert(schema.settlements)
       .values({ groupId, asset })
       .returning({ id: schema.settlements.id });
-    await tx.insert(schema.settlementTransfers).values(
-      transfers.map((t) => ({
-        settlementId: s!.id,
-        fromUserId: t.from.id,
-        toUserId: t.to.id,
-        amountCents: t.amountCents,
-      })),
-    );
+    await tx
+      .insert(schema.settlementTransfers)
+      .values(rows.map((r) => ({ settlementId: s!.id, ...r })));
     return s!.id;
   });
 
@@ -130,11 +199,13 @@ export async function agreeSettlement(
 
   const involved = new Set(s.transfers.flatMap((t) => [t.fromUserId, t.toUserId]));
   if (!involved.has(userId)) throw new AppError("You are not part of this settlement", 403);
+  // Receivers get paid on-chain, so they need a saved address before agreeing.
+  // Payers deposit from any wallet — no address required.
   if (escrowProvider.kind !== "sim") {
-    const user = s.transfers
-      .flatMap((t) => [t.from, t.to])
-      .find((u) => u.id === userId);
-    if (!user?.tonAddress) throw new AppError("Connect your TON wallet before agreeing", 400);
+    const receiving = s.transfers.find((t) => t.toUserId === userId);
+    if (receiving && !receiving.to.tonAddress) {
+      throw new AppError("Save your TON address before agreeing — payouts go on-chain", 400);
+    }
   }
 
   await db
@@ -251,7 +322,19 @@ export async function syncActiveSettlementWithBalances(groupId: string): Promise
   const s = await findOpen(groupId);
   if (!s) return;
 
-  const transfers = minimizeTransactions(await computeBalances(groupId));
+  // A scoped settlement (one payer → chosen receivers) must keep its scope:
+  // recompute only that payer's pairwise nets to its existing receivers, never
+  // reshape into the whole-group graph. Detect scope by a single distinct payer.
+  const payers = new Set(s.transfers.map((t) => t.fromUserId));
+  let transfers: { from: { id: string }; to: { id: string }; amountCents: number }[];
+  if (payers.size === 1) {
+    const payerId = [...payers][0]!;
+    const receiverIds = [...new Set(s.transfers.map((t) => t.toUserId))];
+    const nets = await pairwiseNets(groupId, payerId, receiverIds);
+    transfers = nets.map((n) => ({ from: { id: payerId }, to: { id: n.toUserId }, amountCents: n.amountCents }));
+  } else {
+    transfers = minimizeTransactions(await computeBalances(groupId));
+  }
 
   await db.transaction(async (tx) => {
     if (transfers.length === 0) {
@@ -293,6 +376,49 @@ export async function syncActiveSettlementWithBalances(groupId: string): Promise
 
 export async function getSettlement(settlementId: string): Promise<SettlementDTO> {
   return await toSettlementDTO(await load(settlementId));
+}
+
+/** Provider on-chain state + DB funding state, for the escrow progress UI. */
+export async function getEscrowStatus(settlementId: string): Promise<EscrowStatusDTO> {
+  const s = await load(settlementId);
+  const plan = await toPlan(s);
+  const sim = escrowProvider.kind === "sim";
+
+  const requiredNano = plan.transfers
+    .reduce((sum, t) => sum + BigInt(centsToBaseUnits(t.amountCents, plan.asset)), 0n)
+    .toString();
+  const fundedTransferIds = s.transfers.filter((t) => t.paid).map((t) => t.id);
+
+  const base = {
+    settlementId: s.id,
+    network: sim ? ("sim" as const) : env.TON_NETWORK,
+    requiredNano,
+    fundedTransferIds,
+    released: s.status === "released",
+  };
+
+  if (!s.contractAddress) {
+    return { ...base, address: null, deployed: false, balanceNano: "0", explorerUrl: null };
+  }
+
+  const onChain = await escrowProvider.status(s.contractAddress, plan);
+  // Sim has no chain balance — report funded transfers so the progress bar works.
+  const funded = new Set(fundedTransferIds);
+  const balanceNano = sim
+    ? plan.transfers
+        .filter((t) => funded.has(t.transferId))
+        .reduce((sum, t) => sum + BigInt(centsToBaseUnits(t.amountCents, plan.asset)), 0n)
+        .toString()
+    : onChain.balanceNano;
+  const explorerHost = env.TON_NETWORK === "mainnet" ? "tonviewer.com" : "testnet.tonviewer.com";
+
+  return {
+    ...base,
+    address: s.contractAddress,
+    deployed: onChain.deployed,
+    balanceNano,
+    explorerUrl: sim ? null : `https://${explorerHost}/${s.contractAddress}`,
+  };
 }
 
 /** The deposit the caller (a debtor) must make into the escrow, if any. */

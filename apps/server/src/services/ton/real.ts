@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { SettlementAsset } from "@split-pay/shared";
-import { Address, internal, SendMode, toNano } from "@ton/core";
+import { Address, internal, SendMode, toNano, type Cell } from "@ton/core";
 import { TonClient, WalletContractV4 } from "@ton/ton";
 import { keyPairFromSeed, mnemonicToPrivateKey, type KeyPair } from "@ton/crypto";
 import {
@@ -21,6 +21,18 @@ import {
 
 const POLL_MS = 15_000;
 const GAS_RESERVE = toNano("0.1");
+
+// Plain-text comment (op 0) from a message body; null if absent/binary.
+function readComment(body: Cell): string | null {
+  try {
+    const s = body.beginParse();
+    if (s.remainingBits < 32 || s.loadUint(32) !== 0) return null;
+    const text = s.loadStringTail().trim();
+    return text || null;
+  } catch {
+    return null;
+  }
+}
 
 export function createRealEscrowProvider(opts: {
   mnemonic: string[];
@@ -57,6 +69,13 @@ export function createRealEscrowProvider(opts: {
     const address = wallet.address.toString({ testOnly: true, bounceable: false });
     // Fund a little gas so the escrow can pay out later.
     const { key, wallet: sw } = await service();
+    if (!(await client.isContractDeployed(sw.address))) {
+      const swAddr = sw.address.toString({ testOnly: true, bounceable: false });
+      throw new Error(
+        `TON service wallet ${swAddr} is not deployed/funded — send it some testnet TON ` +
+          `(@testgiver_ton_bot or https://faucet.tonxapi.com) before settling on-chain`,
+      );
+    }
     const opened = client.open(sw);
     const seqno = await opened.getSeqno();
     await opened.sendTransfer({
@@ -79,14 +98,29 @@ export function createRealEscrowProvider(opts: {
 
   function watch(_address: string, plan: EscrowPlan, hooks: WatchHooks): void {
     const paid = new Set<string>();
-    const total = plan.transfers.reduce((a, t) => a + t.amountCents, 0);
+    const transferIds = new Set(plan.transfers.map((t) => t.transferId));
 
     const timer = setInterval(async () => {
       try {
         const { wallet } = await escrowWallet(plan.settlementId);
+
+        // Precise attribution: incoming deposits carrying a transfer-id comment.
+        if (await client.isContractDeployed(wallet.address)) {
+          const txs = await client.getTransactions(wallet.address, { limit: 20 });
+          for (const tx of txs) {
+            const msg = tx.inMessage;
+            if (!msg || msg.info.type !== "internal") continue;
+            const comment = readComment(msg.body);
+            if (comment && transferIds.has(comment) && !paid.has(comment)) {
+              paid.add(comment);
+              hooks.onTransferPaid(comment, tx.hash().toString("hex"));
+            }
+          }
+        }
+
+        // Fallback for comment-less deposits: coarse cumulative-balance heuristic.
         const state = await client.getBalance(wallet.address);
         const funded = state > GAS_RESERVE ? state - GAS_RESERVE : 0n;
-        // Mark deposits paid as balance accrues (coarse: by cumulative funding).
         let covered = 0;
         for (const t of plan.transfers) {
           covered += t.amountCents;
@@ -96,12 +130,12 @@ export function createRealEscrowProvider(opts: {
             hooks.onTransferPaid(t.transferId, null);
           }
         }
+
         if (paid.size === plan.transfers.length) {
           clearInterval(timer);
           await release(plan);
           hooks.onReleased();
         }
-        void total;
       } catch (err) {
         console.error("TON watch error:", err);
       }
@@ -111,7 +145,17 @@ export function createRealEscrowProvider(opts: {
   async function release(plan: EscrowPlan): Promise<void> {
     const { key, wallet } = await escrowWallet(plan.settlementId);
     const opened = client.open(wallet);
-    const seqno = await opened.getSeqno();
+    // First-ever outgoing transfer: uninit wallet has seqno 0 and deploys itself
+    // with this message (the opened contract carries init). getSeqno can throw
+    // on uninit accounts on some endpoints — guard it.
+    let seqno = 0;
+    if (await client.isContractDeployed(wallet.address)) {
+      try {
+        seqno = await opened.getSeqno();
+      } catch {
+        seqno = 0;
+      }
+    }
     const messages = plan.transfers
       .filter((t) => t.toAddress)
       .map((t) =>
@@ -130,5 +174,15 @@ export function createRealEscrowProvider(opts: {
     });
   }
 
-  return { kind: "ton", deploy, depositFor, watch };
+  async function status(
+    address: string,
+    _plan: EscrowPlan,
+  ): Promise<{ deployed: boolean; balanceNano: string }> {
+    const addr = Address.parse(address);
+    const deployed = await client.isContractDeployed(addr);
+    const balance = deployed ? await client.getBalance(addr) : 0n;
+    return { deployed, balanceNano: balance.toString() };
+  }
+
+  return { kind: "ton", deploy, depositFor, watch, status };
 }

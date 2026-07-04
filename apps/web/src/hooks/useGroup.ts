@@ -6,6 +6,26 @@ import type {
 } from "@split-pay/shared";
 import { api } from "../lib/api.js";
 
+/** Groups + members for the login screen. */
+export function useAdminGroups() {
+  return useQuery({ queryKey: ["admin-groups"], queryFn: api.getAdminGroups });
+}
+
+/** The caller's saved TON address. */
+export function useWallet() {
+  return useQuery({ queryKey: ["wallet"], queryFn: api.getWallet });
+}
+
+/** Live escrow state; polls every 10s until released. */
+export function useEscrowStatus(settlementId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ["escrow-status", settlementId],
+    queryFn: () => api.getEscrowStatus(settlementId!),
+    enabled: !!settlementId && enabled,
+    refetchInterval: (query) => (query.state.data?.released ? false : 10_000),
+  });
+}
+
 /** Group summary: members, balances, who-pays-whom, active settlement. */
 export function useGroupSummary(groupId: string | null) {
   return useQuery({
@@ -42,7 +62,11 @@ export function useCreateExpense(groupId: string | null) {
 }
 
 export function useSaveWallet() {
-  return useMutation({ mutationFn: (tonAddress: string) => api.saveWallet(tonAddress) });
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tonAddress: string) => api.saveWallet(tonAddress),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["wallet"] }),
+  });
 }
 
 export function useCreateSettlement(groupId: string | null) {

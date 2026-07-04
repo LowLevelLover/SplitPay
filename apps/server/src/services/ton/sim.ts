@@ -29,4 +29,9 @@ export const simEscrowProvider: EscrowProvider = {
   watch(_address: string, _plan: EscrowPlan, _hooks: WatchHooks): void {
     // no-op: sim funding is user-driven via the API
   },
+
+  async status(_address: string, _plan: EscrowPlan): Promise<{ deployed: boolean; balanceNano: string }> {
+    // The service layer overlays funded amounts from the DB.
+    return { deployed: true, balanceNano: "0" };
+  },
 };

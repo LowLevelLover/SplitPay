@@ -1,6 +1,6 @@
 import type { SplitPayContext } from "../context.js";
 import { AppError } from "../../lib/errors.js";
-import { formatCents } from "../../lib/money.js";
+import { fmtMoney } from "../format.js";
 import {
   confirmManualSettlement,
   getManualSettlement,
@@ -22,16 +22,18 @@ export async function handleManualSettlementCallback(ctx: SplitPayContext): Prom
   try {
     dto = await getManualSettlement(id);
   } catch {
-    await ctx.answerCallbackQuery({ text: "This settle-up no longer exists.", show_alert: true });
+    await ctx.answerCallbackQuery({ text: "این درخواست تسویه دیگر وجود ندارد.", show_alert: true });
     return;
   }
 
   if (dto.to.id !== ctx.dbUserId) {
-    await ctx.answerCallbackQuery({ text: `Only ${nm(dto.to)} can respond to this.`, show_alert: true });
+    await ctx.answerCallbackQuery({ text: `فقط ${nm(dto.to)} می‌تواند به این درخواست پاسخ دهد.`, show_alert: true });
     return;
   }
   if (dto.status !== "pending") {
-    await ctx.answerCallbackQuery({ text: `Already ${dto.status}.` });
+    await ctx.answerCallbackQuery({
+      text: dto.status === "confirmed" ? "قبلاً تأیید شده است." : "قبلاً رد شده است.",
+    });
     return;
   }
 
@@ -41,18 +43,18 @@ export async function handleManualSettlementCallback(ctx: SplitPayContext): Prom
         ? await confirmManualSettlement(id, ctx.dbUserId)
         : await rejectManualSettlement(id, ctx.dbUserId);
   } catch (err) {
-    const msg = err instanceof AppError ? err.message : "Something went wrong.";
+    const msg = err instanceof AppError ? `انجام نشد: ${err.message}` : "مشکلی پیش آمد.";
     await ctx.answerCallbackQuery({ text: msg, show_alert: true });
     return;
   }
 
-  const amount = `${formatCents(dto.amountCents, dto.currency)} ${dto.currency}`;
+  const amount = fmtMoney(dto.amountCents, dto.currency);
   const outcome =
     dto.status === "confirmed"
-      ? `✅ Confirmed — ${nm(dto.from)} paid ${nm(dto.to)} *${amount}*. Debt cleared.`
-      : `❌ Rejected — ${nm(dto.from)}'s claimed payment of *${amount}* wasn't confirmed.`;
+      ? `✅ تأیید شد — ${nm(dto.from)} مبلغ *${amount}* را به ${nm(dto.to)} پرداخت کرد. بدهی تسویه شد.`
+      : `❌ رد شد — پرداخت ادعایی ${nm(dto.from)} به مبلغ *${amount}* تأیید نشد.`;
 
-  await ctx.answerCallbackQuery({ text: dto.status === "confirmed" ? "Confirmed" : "Rejected" });
+  await ctx.answerCallbackQuery({ text: dto.status === "confirmed" ? "تأیید شد" : "رد شد" });
   try {
     await ctx.editMessageText(outcome, { parse_mode: "Markdown" });
   } catch {
